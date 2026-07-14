@@ -84,15 +84,17 @@ input[type="range"] { width: 100%; height: 4px; accent-color: var(--orange); }
 .toggle span::after { content: ""; position: absolute; width: 10px; height: 10px; top: 2px; left: 2px; border-radius: 50%; background: white; transition: .2s; }
 .toggle input:checked + span { background: var(--orange); }
 .toggle input:checked + span::after { transform: translateX(11px); }
-.canvas-stage { position: relative; min-height: 520px; padding: 32px; overflow: hidden; display: grid; place-items: center; background-image: radial-gradient(rgba(64,54,42,.10) 1px, transparent 1px); background-size: 16px 16px; }
-.canvas-scroll { max-width: 100%; max-height: 520px; padding: 26px; overflow: auto; display: flex; align-items: center; justify-content: center; }
-.bead-canvas { display: block; max-width: min(100%, 720px); height: auto; background: #f7f2e8; box-shadow: 0 13px 35px rgba(42,34,26,.18); transform-origin: center; touch-action: manipulation; image-rendering: auto; }
+.canvas-stage { position: relative; min-height: 520px; overflow: hidden; background-image: radial-gradient(rgba(64,54,42,.10) 1px, transparent 1px); background-size: 16px 16px; }
+.canvas-scroll { position: absolute; inset: 0; padding: 36px 26px 26px; overflow: auto; }
+.canvas-scroll-content { width: max-content; height: max-content; min-width: 100%; min-height: 100%; display: grid; place-items: center; }
+.bead-canvas { display: block; max-width: none; background: #f7f2e8; box-shadow: 0 13px 35px rgba(42,34,26,.18); touch-action: manipulation; image-rendering: auto; }
 .bead-canvas.tool-paint { cursor: crosshair; }
 .bead-canvas.tool-erase { cursor: cell; }
 .bead-canvas.tool-pick { cursor: copy; }
 .ruler-label { position: absolute; z-index: 2; color: #8d8378; font-size: 8px; letter-spacing: .14em; top: 16px; }
 .zoom-control { position: absolute; right: 15px; bottom: 15px; display: flex; align-items: center; border: 1px solid var(--line); background: rgba(255,253,248,.94); border-radius: 8px; box-shadow: 0 5px 20px rgba(60,48,35,.08); }
 .zoom-control button { border: 0; background: none; padding: 7px 10px; cursor: pointer; }
+.zoom-control button.fit-active { color: var(--orange); background: #fff0e8; font-size: 9px; font-weight: 800; }
 .zoom-control span { min-width: 47px; text-align: center; font-size: 9px; color: var(--muted); }
 .palette-strip { padding: 13px 17px 15px; background: var(--card); border-top: 1px solid var(--line); }
 .palette-title { display: flex; align-items: baseline; gap: 9px; margin-bottom: 10px; }
@@ -144,9 +146,8 @@ footer { max-width: 1440px; margin: 0 auto; padding: 0 4vw 40px; display: flex; 
   .canvas-panel { min-height: 580px; }
   .canvas-toolbar { overflow-x: auto; }
   .toolbar-right .toggle { display: none; }
-  .canvas-stage { min-height: 430px; padding: 20px 5px; }
-  .canvas-scroll { width: 100%; max-height: 430px; justify-content: flex-start; padding: 25px 18px 55px; }
-  .bead-canvas { min-width: 520px; }
+  .canvas-stage { min-height: 430px; }
+  .canvas-scroll { padding: 34px 18px 55px; }
   .palette-strip { position: sticky; bottom: 0; z-index: 8; }
   .swatches { display: flex; overflow-x: auto; padding: 3px 2px; }
   .swatches button { width: 31px; min-width: 31px; }

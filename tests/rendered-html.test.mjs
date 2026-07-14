@@ -23,5 +23,8 @@ test("server-renders the Bead Grid application", async () => {
   assert.match(html, /生成设置/);
   assert.match(html, /材料清单/);
   assert.match(html, /图片仅在本机处理/);
+  assert.match(html, /class="bead-canvas tool-paint" style="width:720px;height:720px"/);
+  assert.match(html, />适应<\/button>/);
+  assert.doesNotMatch(html, /transform:\s*scale/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Starter Project/);
 });

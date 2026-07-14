@@ -7,6 +7,11 @@
 - Add automatic GitHub Pages deployment for every push to `main`.
 - Add a dedicated static export build and verification test for the `/bead-grid` base path.
 
+### Fixes
+
+- Fit the entire canvas into the available desktop or mobile workspace by default.
+- Keep every edge of a manually zoomed canvas reachable inside the scroll area.
+
 ## 0.1.0 - 2026-07-15
 
 ### Features

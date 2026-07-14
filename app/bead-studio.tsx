@@ -85,6 +85,8 @@ export function BeadStudio() {
   const [selectedColor, setSelectedColor] = useState("A04");
   const [tool, setTool] = useState<Tool>("paint");
   const [zoom, setZoom] = useState(1);
+  const [fitZoom, setFitZoom] = useState(1);
+  const [isFitZoom, setIsFitZoom] = useState(true);
   const [showCodes, setShowCodes] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -93,7 +95,14 @@ export function BeadStudio() {
   const [undoStack, setUndoStack] = useState<Array<Array<string | null>>>([]);
   const [redoStack, setRedoStack] = useState<Array<Array<string | null>>>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasScrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const canvasCellSize = Math.max(10, Math.min(24, 720 / Math.max(width, height)));
+  const canvasBaseWidth = Math.round(width * canvasCellSize);
+  const canvasBaseHeight = Math.round(height * canvasCellSize);
+  const activeZoom = isFitZoom ? fitZoom : zoom;
+  const canvasDisplayWidth = Math.round(canvasBaseWidth * activeZoom);
+  const canvasDisplayHeight = Math.round(canvasBaseHeight * activeZoom);
 
   const colorMap = useMemo(() => new Map(PALETTE.map((color) => [color.code, color])), []);
   const counts = useMemo(() => {
@@ -108,7 +117,7 @@ export function BeadStudio() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const cell = Math.max(10, Math.min(24, 720 / Math.max(width, height)));
+    const cell = canvasCellSize;
     canvas.width = width * cell;
     canvas.height = height * cell;
     const context = canvas.getContext("2d");
@@ -143,7 +152,27 @@ export function BeadStudio() {
         }
       }
     }
-  }, [grid, width, height, colorMap, showCodes, showGrid]);
+  }, [grid, width, height, colorMap, showCodes, showGrid, canvasCellSize]);
+
+  useEffect(() => {
+    const scrollArea = canvasScrollRef.current;
+    if (!scrollArea) return;
+
+    const updateFitZoom = () => {
+      const style = window.getComputedStyle(scrollArea);
+      const horizontalPadding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+      const verticalPadding = Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom);
+      const availableWidth = Math.max(1, scrollArea.clientWidth - horizontalPadding);
+      const availableHeight = Math.max(1, scrollArea.clientHeight - verticalPadding);
+      const nextFitZoom = Math.max(.2, Math.min(2.2, availableWidth / canvasBaseWidth, availableHeight / canvasBaseHeight));
+      setFitZoom(nextFitZoom);
+    };
+
+    updateFitZoom();
+    const observer = new ResizeObserver(updateFitZoom);
+    observer.observe(scrollArea);
+    return () => observer.disconnect();
+  }, [canvasBaseWidth, canvasBaseHeight]);
 
   useEffect(() => {
     if (!toast) return;
@@ -397,19 +426,22 @@ export function BeadStudio() {
 
           <div className="canvas-stage">
             <div className="ruler-label top">{width} BEADS</div>
-            <div className="canvas-scroll">
-              <canvas
-                ref={canvasRef}
-                className={`bead-canvas tool-${tool}`}
-                style={{ transform: `scale(${zoom})` }}
-                onPointerDown={updateCell}
-                aria-label={`${width} 乘 ${height} 拼豆画布`}
-              />
+            <div ref={canvasScrollRef} className="canvas-scroll">
+              <div className="canvas-scroll-content">
+                <canvas
+                  ref={canvasRef}
+                  className={`bead-canvas tool-${tool}`}
+                  style={{ width: `${canvasDisplayWidth}px`, height: `${canvasDisplayHeight}px` }}
+                  onPointerDown={updateCell}
+                  aria-label={`${width} 乘 ${height} 拼豆画布`}
+                />
+              </div>
             </div>
             <div className="zoom-control">
-              <button onClick={() => setZoom((value) => Math.max(.45, value - .15))}>−</button>
-              <span>{Math.round(zoom * 100)}%</span>
-              <button onClick={() => setZoom((value) => Math.min(2.2, value + .15))}>＋</button>
+              <button aria-label="缩小画布" onClick={() => { setZoom(Math.max(.2, activeZoom - .15)); setIsFitZoom(false); }}>−</button>
+              <button className={isFitZoom ? "fit-active" : ""} onClick={() => setIsFitZoom(true)}>适应</button>
+              <span>{Math.round(activeZoom * 100)}%</span>
+              <button aria-label="放大画布" onClick={() => { setZoom(Math.min(2.2, activeZoom + .15)); setIsFitZoom(false); }}>＋</button>
             </div>
           </div>
 
