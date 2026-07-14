@@ -28,7 +28,14 @@ npm run dev
 ```bash
 npm run lint
 npm test
+npm run test:pages
 ```
+
+## 在线访问与自动部署
+
+线上地址：[https://hugozhou-ai.github.io/bead-grid/](https://hugozhou-ai.github.io/bead-grid/)
+
+`.github/workflows/deploy-pages.yml` 会在每次代码合入或推送到 `main` 后自动构建并部署 GitHub Pages，也支持在 Actions 页面手动触发。
 
 ## 技术栈
 

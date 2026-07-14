@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Deployment
+
+- Add automatic GitHub Pages deployment for every push to `main`.
+- Add a dedicated static export build and verification test for the `/bead-grid` base path.
+
 ## 0.1.0 - 2026-07-15
 
 ### Features
