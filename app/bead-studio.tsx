@@ -9,6 +9,7 @@ import {
   FileJson,
   ImagePlus,
   Info,
+  Link2,
   Maximize2,
   Minus,
   MousePointer2,
@@ -115,6 +116,8 @@ export function BeadStudio() {
   const [width, setWidth] = useState(32);
   const [height, setHeight] = useState(32);
   const [colorLimit, setColorLimit] = useState(10);
+  const [lockAspectRatio, setLockAspectRatio] = useState(false);
+  const [lockedAspectRatio, setLockedAspectRatio] = useState(1);
   const [grid, setGrid] = useState<Array<string | null>>(() => createDemo(32, 32));
   const [sourceName, setSourceName] = useState("示例爱心");
   const [selectedColor, setSelectedColor] = useState("A04");
@@ -635,6 +638,29 @@ export function BeadStudio() {
     }
   }
 
+  function handleWidthChange(newWidth: number) {
+    setWidth(newWidth);
+    if (lockAspectRatio && newWidth > 0) {
+      const newHeight = Math.round(newWidth / lockedAspectRatio);
+      setHeight(newHeight);
+    }
+  }
+
+  function handleHeightChange(newHeight: number) {
+    setHeight(newHeight);
+    if (lockAspectRatio && newHeight > 0) {
+      const newWidth = Math.round(newHeight * lockedAspectRatio);
+      setWidth(newWidth);
+    }
+  }
+
+  function toggleLockAspectRatio() {
+    if (!lockAspectRatio) {
+      setLockedAspectRatio(width / height);
+    }
+    setLockAspectRatio(!lockAspectRatio);
+  }
+
   function applySize() {
     const safeWidth = Math.max(8, Math.min(80, Math.round(width)));
     const safeHeight = Math.max(8, Math.min(80, Math.round(height)));
@@ -721,9 +747,10 @@ export function BeadStudio() {
           <div className="field-group">
             <label>网格尺寸 <span>{width} × {height}</span></label>
             <div className="dimension-row">
-              <input aria-label="横向豆子数量" type="number" min="8" max="80" value={width} onChange={(e) => setWidth(Number(e.target.value))} />
+              <input aria-label="横向豆子数量" type="number" min="8" max="80" value={width} onChange={(e) => handleWidthChange(Number(e.target.value))} />
               <b>×</b>
-              <input aria-label="纵向豆子数量" type="number" min="8" max="80" value={height} onChange={(e) => setHeight(Number(e.target.value))} />
+              <input aria-label="纵向豆子数量" type="number" min="8" max="80" value={height} onChange={(e) => handleHeightChange(Number(e.target.value))} />
+              <button className={`icon-label ${lockAspectRatio ? "active" : ""}`} title={lockAspectRatio ? "取消关联调整" : "启用关联调整"} onClick={toggleLockAspectRatio}><Link2 aria-hidden="true" /></button>
               <button className="icon-label" onClick={applySize}><Check aria-hidden="true" />应用</button>
             </div>
             <small>支持 8–80 格，数字越大细节越丰富</small>
