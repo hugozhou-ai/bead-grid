@@ -24,11 +24,25 @@ test("server-renders the Bead Grid application", async () => {
   assert.match(html, /生成设置/);
   assert.match(html, /材料清单/);
   assert.match(html, /图片仅在本机处理/);
+  assert.match(html, /比例已锁定 32:32/);
+  assert.match(html, /5 mm 拼豆/);
+  assert.match(html, /打开项目/);
+  assert.match(html, /导出材料 CSV/);
   assert.match(html, /class="canvas-scroll-content fit"/);
   assert.match(html, /class="bead-canvas tool-paint" style="width:720px;height:720px"/);
   assert.match(html, />适应<\/button>/);
   assert.doesNotMatch(html, /transform:\s*scale/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Starter Project/);
+});
+
+test("provides project persistence and non-destructive resizing", async () => {
+  const source = await readFile(new URL("../app/bead-studio.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /bead-grid\.project\.v2/);
+  assert.match(source, /window\.localStorage\.setItem/);
+  assert.match(source, /function importProject/);
+  assert.match(source, /function resizeGrid/);
+  assert.doesNotMatch(source, /else commitGrid\(createDemo/);
 });
 
 test("keeps browser zoom interception scoped to the canvas workspace", async () => {

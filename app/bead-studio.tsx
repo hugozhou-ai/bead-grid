@@ -3,16 +3,21 @@
 import { ChangeEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
-  ChevronDown,
+  Clock3,
   Download,
   Eraser,
+  FileDown,
   FileJson,
+  FileSpreadsheet,
+  FolderOpen,
   ImagePlus,
   Info,
   Link2,
+  Link2Off,
   Maximize2,
   Minus,
   MousePointer2,
+  Palette,
   PaintBucket,
   Pencil,
   Pipette,
@@ -34,6 +39,23 @@ type BeadColor = {
 };
 
 type Tool = "paint" | "erase" | "pick" | "select";
+
+type StoredProject = {
+  version: 2;
+  name: string;
+  width: number;
+  height: number;
+  colorLimit: number;
+  palette: "通用暖色 16 色";
+  cells: Array<string | null>;
+  savedAt: string;
+};
+
+type GridSnapshot = {
+  cells: Array<string | null>;
+  width: number;
+  height: number;
+};
 
 type SelectionGesture = {
   pointerId: number;
@@ -66,6 +88,10 @@ const PALETTE: BeadColor[] = [
 ];
 
 const RGB_PALETTE = PALETTE.map((color) => ({ ...color, rgb: hexToRgb(color.hex) }));
+const PROJECT_STORAGE_KEY = "bead-grid.project.v2";
+const MIN_GRID_SIZE = 8;
+const MAX_GRID_SIZE = 80;
+const SIZE_PRESETS = [16, 24, 32, 48];
 
 function hexToRgb(hex: string): [number, number, number] {
   return [
@@ -103,6 +129,16 @@ function createDemo(width: number, height: number): Array<string | null> {
   });
 }
 
+function resizeGrid(cells: Array<string | null>, fromWidth: number, fromHeight: number, toWidth: number, toHeight: number) {
+  return Array.from({ length: toWidth * toHeight }, (_, index) => {
+    const x = index % toWidth;
+    const y = Math.floor(index / toWidth);
+    const sourceX = Math.min(fromWidth - 1, Math.floor(((x + .5) / toWidth) * fromWidth));
+    const sourceY = Math.min(fromHeight - 1, Math.floor(((y + .5) / toHeight) * fromHeight));
+    return cells[sourceY * fromWidth + sourceX] ?? null;
+  });
+}
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -112,14 +148,42 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+function clampGridSize(value: number) {
+  return Math.max(MIN_GRID_SIZE, Math.min(MAX_GRID_SIZE, Math.round(value || MIN_GRID_SIZE)));
+}
+
+function parseStoredProject(value: unknown): StoredProject {
+  if (!value || typeof value !== "object") throw new Error("项目内容不是对象");
+  const candidate = value as Partial<StoredProject>;
+  const width = clampGridSize(Number(candidate.width));
+  const height = clampGridSize(Number(candidate.height));
+  if (candidate.width !== width || candidate.height !== height) throw new Error("图纸尺寸超出 8–80 范围");
+  if (!Array.isArray(candidate.cells) || candidate.cells.length !== width * height) throw new Error("图纸格子数量与尺寸不一致");
+  const validCodes = new Set(PALETTE.map((color) => color.code));
+  if (candidate.cells.some((cell) => cell !== null && (typeof cell !== "string" || !validCodes.has(cell)))) throw new Error("图纸包含未知色号");
+  return {
+    version: 2,
+    name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim().slice(0, 80) : "未命名拼豆项目",
+    width,
+    height,
+    colorLimit: Math.max(3, Math.min(16, Math.round(Number(candidate.colorLimit) || 10))),
+    palette: "通用暖色 16 色",
+    cells: candidate.cells,
+    savedAt: typeof candidate.savedAt === "string" ? candidate.savedAt : new Date().toISOString(),
+  };
+}
+
 export function BeadStudio() {
   const [width, setWidth] = useState(32);
   const [height, setHeight] = useState(32);
+  const [draftWidth, setDraftWidth] = useState(32);
+  const [draftHeight, setDraftHeight] = useState(32);
   const [colorLimit, setColorLimit] = useState(10);
-  const [lockAspectRatio, setLockAspectRatio] = useState(false);
+  const [lockAspectRatio, setLockAspectRatio] = useState(true);
   const [lockedAspectRatio, setLockedAspectRatio] = useState(1);
   const [grid, setGrid] = useState<Array<string | null>>(() => createDemo(32, 32));
   const [sourceName, setSourceName] = useState("示例爱心");
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState("A04");
   const [tool, setTool] = useState<Tool>("paint");
   const [zoom, setZoom] = useState(1);
@@ -130,12 +194,14 @@ export function BeadStudio() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [toast, setToast] = useState("示例图案已就绪，可以上传照片开始创作");
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
-  const [undoStack, setUndoStack] = useState<Array<Array<string | null>>>([]);
-  const [redoStack, setRedoStack] = useState<Array<Array<string | null>>>([]);
+  const [undoStack, setUndoStack] = useState<GridSnapshot[]>([]);
+  const [redoStack, setRedoStack] = useState<GridSnapshot[]>([]);
   const [selectedCells, setSelectedCells] = useState<Set<number>>(() => new Set());
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasScrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const projectInputRef = useRef<HTMLInputElement>(null);
+  const draftReadyRef = useRef(false);
   const touchPointersRef = useRef(new Map<number, { x: number; y: number }>());
   const touchGestureRef = useRef<{
     pointerId: number;
@@ -167,6 +233,50 @@ export function BeadStudio() {
       .sort((a, b) => b.count - a.count);
   }, [grid, colorMap]);
   const total = counts.reduce((sum, item) => sum + item.count, 0);
+  const pendingSizeChanged = draftWidth !== width || draftHeight !== height;
+  const physicalWidth = (draftWidth * .5).toFixed(draftWidth % 2 ? 1 : 0);
+  const physicalHeight = (draftHeight * .5).toFixed(draftHeight % 2 ? 1 : 0);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const raw = window.localStorage.getItem(PROJECT_STORAGE_KEY);
+        if (raw) {
+          const project = parseStoredProject(JSON.parse(raw));
+          setWidth(project.width);
+          setHeight(project.height);
+          setDraftWidth(project.width);
+          setDraftHeight(project.height);
+          setLockedAspectRatio(project.width / project.height);
+          setColorLimit(project.colorLimit);
+          setGrid(project.cells);
+          setSourceName(project.name);
+          setDraftSavedAt(project.savedAt);
+          setToast("已恢复上次自动保存的图纸");
+        }
+      } catch (error) {
+        console.error("[BEAD_DRAFT]", JSON.stringify({ action: "restore", message: error instanceof Error ? error.message : String(error) }));
+      } finally {
+        draftReadyRef.current = true;
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!draftReadyRef.current) return;
+    const timer = window.setTimeout(() => {
+      try {
+        const savedAt = new Date().toISOString();
+        const project: StoredProject = { version: 2, name: sourceName, width, height, colorLimit, palette: "通用暖色 16 色", cells: grid, savedAt };
+        window.localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(project));
+        setDraftSavedAt(savedAt);
+      } catch (error) {
+        console.error("[BEAD_DRAFT]", JSON.stringify({ action: "save", message: error instanceof Error ? error.message : String(error) }));
+      }
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [sourceName, width, height, colorLimit, grid]);
 
   useEffect(() => {
     activeZoomRef.current = activeZoom;
@@ -318,9 +428,16 @@ export function BeadStudio() {
     selectionGestureRef.current = null;
   }
 
-  function commitGrid(next: Array<string | null>, message?: string, preserveSelection = false) {
-    setUndoStack((stack) => [...stack.slice(-29), grid]);
+  function commitGrid(next: Array<string | null>, message?: string, preserveSelection = false, nextWidth = width, nextHeight = height) {
+    setUndoStack((stack) => [...stack.slice(-29), { cells: grid, width, height }]);
     setRedoStack([]);
+    if (nextWidth !== width || nextHeight !== height) {
+      setWidth(nextWidth);
+      setHeight(nextHeight);
+      setDraftWidth(nextWidth);
+      setDraftHeight(nextHeight);
+      setLockedAspectRatio(nextWidth / nextHeight);
+    }
     setGrid(next);
     if (!preserveSelection) updateSelection(new Set());
     if (message) setToast(message);
@@ -329,16 +446,26 @@ export function BeadStudio() {
   function undo() {
     const previous = undoStack.at(-1);
     if (!previous) return;
-    setRedoStack((stack) => [...stack, grid]);
-    setGrid(previous);
+    setRedoStack((stack) => [...stack, { cells: grid, width, height }]);
+    setWidth(previous.width);
+    setHeight(previous.height);
+    setDraftWidth(previous.width);
+    setDraftHeight(previous.height);
+    setLockedAspectRatio(previous.width / previous.height);
+    setGrid(previous.cells);
     setUndoStack((stack) => stack.slice(0, -1));
   }
 
   function redo() {
     const next = redoStack.at(-1);
     if (!next) return;
-    setUndoStack((stack) => [...stack, grid]);
-    setGrid(next);
+    setUndoStack((stack) => [...stack, { cells: grid, width, height }]);
+    setWidth(next.width);
+    setHeight(next.height);
+    setDraftWidth(next.width);
+    setDraftHeight(next.height);
+    setLockedAspectRatio(next.width / next.height);
+    setGrid(next.cells);
     setRedoStack((stack) => stack.slice(0, -1));
   }
 
@@ -381,6 +508,12 @@ export function BeadStudio() {
   }
 
   function handleCanvasKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
+      event.preventDefault();
+      if (event.shiftKey) redo();
+      else undo();
+      return;
+    }
     if (event.key === "Escape") {
       updateSelection(new Set());
       return;
@@ -568,15 +701,21 @@ export function BeadStudio() {
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setToast("请选择图片文件");
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setToast("请选择 JPG、PNG 或 WEBP 图片");
+      event.target.value = "";
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      setToast("图片不能超过 20 MB");
+      event.target.value = "";
       return;
     }
     const url = URL.createObjectURL(file);
     if (sourceUrl) URL.revokeObjectURL(sourceUrl);
     setSourceUrl(url);
     setSourceName(file.name.replace(/\.[^.]+$/, ""));
-    await generateFromImage(url, width, height, colorLimit);
+    await generateFromImage(url, clampGridSize(draftWidth), clampGridSize(draftHeight), colorLimit);
     event.target.value = "";
   }
 
@@ -629,7 +768,7 @@ export function BeadStudio() {
         const pixelIndex = index * 4;
         return nearestColor(pixels[pixelIndex], pixels[pixelIndex + 1], pixels[pixelIndex + 2], allowed);
       });
-      commitGrid(next, `已生成 ${targetWidth} × ${targetHeight} 图纸`);
+      commitGrid(next, `已生成 ${targetWidth} × ${targetHeight} 图纸`, false, targetWidth, targetHeight);
     } catch (error) {
       console.error("[BEAD_GENERATE]", JSON.stringify({ message: error instanceof Error ? error.message : String(error) }));
       setToast("图片处理失败，请换一张图片重试");
@@ -639,35 +778,44 @@ export function BeadStudio() {
   }
 
   function handleWidthChange(newWidth: number) {
-    setWidth(newWidth);
+    setDraftWidth(newWidth);
     if (lockAspectRatio && newWidth > 0) {
-      const newHeight = Math.round(newWidth / lockedAspectRatio);
-      setHeight(newHeight);
+      setDraftHeight(clampGridSize(newWidth / lockedAspectRatio));
     }
   }
 
   function handleHeightChange(newHeight: number) {
-    setHeight(newHeight);
+    setDraftHeight(newHeight);
     if (lockAspectRatio && newHeight > 0) {
-      const newWidth = Math.round(newHeight * lockedAspectRatio);
-      setWidth(newWidth);
+      setDraftWidth(clampGridSize(newHeight * lockedAspectRatio));
     }
   }
 
   function toggleLockAspectRatio() {
     if (!lockAspectRatio) {
-      setLockedAspectRatio(width / height);
+      setLockedAspectRatio(draftWidth / draftHeight);
     }
     setLockAspectRatio(!lockAspectRatio);
   }
 
+  function applyPreset(size: number) {
+    setDraftWidth(size);
+    setDraftHeight(size);
+    setLockedAspectRatio(1);
+    setLockAspectRatio(true);
+  }
+
   function applySize() {
-    const safeWidth = Math.max(8, Math.min(80, Math.round(width)));
-    const safeHeight = Math.max(8, Math.min(80, Math.round(height)));
-    setWidth(safeWidth);
-    setHeight(safeHeight);
-    if (sourceUrl) void generateFromImage(sourceUrl, safeWidth, safeHeight, colorLimit);
-    else commitGrid(createDemo(safeWidth, safeHeight), `已调整为 ${safeWidth} × ${safeHeight}`);
+    const safeWidth = clampGridSize(draftWidth);
+    const safeHeight = clampGridSize(draftHeight);
+    setDraftWidth(safeWidth);
+    setDraftHeight(safeHeight);
+    if (sourceUrl) {
+      void generateFromImage(sourceUrl, safeWidth, safeHeight, colorLimit);
+      return;
+    }
+    const resized = resizeGrid(grid, width, height, safeWidth, safeHeight);
+    commitGrid(resized, `已调整为 ${safeWidth} × ${safeHeight}，原图案已保留`, false, safeWidth, safeHeight);
   }
 
   function exportPng() {
@@ -703,8 +851,48 @@ export function BeadStudio() {
   }
 
   function exportProject() {
-    const data = JSON.stringify({ version: 1, name: sourceName, width, height, palette: "通用暖色 16 色", cells: grid }, null, 2);
+    const data = JSON.stringify({ version: 2, name: sourceName, width, height, colorLimit, palette: "通用暖色 16 色", cells: grid, savedAt: new Date().toISOString() }, null, 2);
     downloadBlob(new Blob([data], { type: "application/json" }), `${sourceName || "拼豆项目"}.json`);
+    setToast("项目源文件已保存");
+  }
+
+  async function importProject(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      if (file.size > 5 * 1024 * 1024) throw new Error("项目文件超过 5 MB");
+      const project = parseStoredProject(JSON.parse(await file.text()));
+      if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+      setSourceUrl(null);
+      setSourceName(project.name);
+      setWidth(project.width);
+      setHeight(project.height);
+      setDraftWidth(project.width);
+      setDraftHeight(project.height);
+      setLockedAspectRatio(project.width / project.height);
+      setColorLimit(project.colorLimit);
+      setGrid(project.cells);
+      setUndoStack([]);
+      setRedoStack([]);
+      updateSelection(new Set());
+      setToast(`已打开 ${project.name}`);
+    } catch (error) {
+      console.error("[BEAD_PROJECT_IMPORT]", JSON.stringify({ file: file.name, message: error instanceof Error ? error.message : String(error) }));
+      setToast("项目文件无效，请选择由豆格导出的 JSON 文件");
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  function exportMaterialsCsv() {
+    const rows = [
+      ["色号", "颜色", "数量", "建议准备（+10%）"],
+      ...counts.map(({ color, count }) => [color.code, color.name, String(count), String(Math.ceil(count * 1.1))]),
+      ["合计", "", String(total), String(Math.ceil(total * 1.1))],
+    ];
+    const csv = `\uFEFF${rows.map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(",")).join("\r\n")}`;
+    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `${sourceName || "拼豆项目"}-材料清单.csv`);
+    setToast("材料清单已导出");
   }
 
   return (
@@ -716,6 +904,7 @@ export function BeadStudio() {
         </a>
         <div className="header-actions">
           <span className="privacy-note"><ShieldCheck aria-hidden="true" /> 图片仅在本机处理</span>
+          <span className="save-status" title={draftSavedAt ? `最近保存：${new Date(draftSavedAt).toLocaleString("zh-CN")}` : "正在准备自动保存"}><Clock3 aria-hidden="true" />{draftSavedAt ? "已自动保存" : "自动保存"}</span>
           <button className="quiet-button icon-label" onClick={exportProject}><FileJson aria-hidden="true" />保存项目</button>
           <button className="primary-button compact icon-label" onClick={exportPng}><Download aria-hidden="true" />导出图纸</button>
         </div>
@@ -737,23 +926,35 @@ export function BeadStudio() {
           </div>
 
           <input ref={fileInputRef} className="sr-only" type="file" accept="image/*" onChange={handleUpload} />
+          <input ref={projectInputRef} className="sr-only" type="file" accept="application/json,.json" onChange={importProject} />
           <button className="upload-card" onClick={() => fileInputRef.current?.click()} disabled={isGenerating}>
             <span className="upload-icon"><ImagePlus aria-hidden="true" /></span>
             <strong>{isGenerating ? "正在分析颜色…" : "上传一张图片"}</strong>
             <small>JPG、PNG、WEBP · 自动居中裁剪</small>
           </button>
-          <p className="current-file"><span className="status-dot" /> 当前：{sourceName}</p>
+          <div className="project-actions">
+            <button className="icon-label" onClick={() => projectInputRef.current?.click()}><FolderOpen aria-hidden="true" />打开项目</button>
+            <button className="icon-label" onClick={exportProject}><FileDown aria-hidden="true" />保存源文件</button>
+          </div>
+
+          <div className="field-group project-name-field">
+            <label htmlFor="project-name">项目名称</label>
+            <input id="project-name" value={sourceName} maxLength={80} onChange={(event) => setSourceName(event.target.value)} />
+          </div>
 
           <div className="field-group">
-            <label>网格尺寸 <span>{width} × {height}</span></label>
+            <label>网格尺寸 <span>{draftWidth} × {draftHeight}</span></label>
             <div className="dimension-row">
-              <input aria-label="横向豆子数量" type="number" min="8" max="80" value={width} onChange={(e) => handleWidthChange(Number(e.target.value))} />
-              <b>×</b>
-              <input aria-label="纵向豆子数量" type="number" min="8" max="80" value={height} onChange={(e) => handleHeightChange(Number(e.target.value))} />
-              <button className={`icon-label ${lockAspectRatio ? "active" : ""}`} title={lockAspectRatio ? "取消关联调整" : "启用关联调整"} onClick={toggleLockAspectRatio}><Link2 aria-hidden="true" /></button>
-              <button className="icon-label" onClick={applySize}><Check aria-hidden="true" />应用</button>
+              <label><span>宽</span><input aria-label="横向豆子数量" type="number" min="8" max="80" value={draftWidth} onChange={(e) => handleWidthChange(Number(e.target.value))} /></label>
+              <button className={`ratio-lock ${lockAspectRatio ? "active" : ""}`} aria-pressed={lockAspectRatio} onClick={toggleLockAspectRatio}>{lockAspectRatio ? <Link2 aria-hidden="true" /> : <Link2Off aria-hidden="true" />}<span>{lockAspectRatio ? `比例已锁定 ${draftWidth}:${draftHeight}` : "自由尺寸"}</span></button>
+              <label><span>高</span><input aria-label="纵向豆子数量" type="number" min="8" max="80" value={draftHeight} onChange={(e) => handleHeightChange(Number(e.target.value))} /></label>
             </div>
-            <small>支持 8–80 格，数字越大细节越丰富</small>
+            <div className="size-presets" aria-label="常用网格尺寸">
+              {SIZE_PRESETS.map((size) => <button key={size} className={draftWidth === size && draftHeight === size ? "active" : ""} onClick={() => applyPreset(size)}>{size}²</button>)}
+            </div>
+            <p className="size-summary">约 {physicalWidth} × {physicalHeight} cm · 5 mm 拼豆</p>
+            <button className={`apply-size icon-label${pendingSizeChanged ? " pending" : ""}`} onClick={applySize} disabled={!pendingSizeChanged}><Check aria-hidden="true" />{pendingSizeChanged ? "应用新尺寸" : "尺寸已应用"}</button>
+            <small>支持 8–80 格；开启比例锁定后，修改一边会同步另一边</small>
           </div>
 
           <div className="field-group">
@@ -764,11 +965,11 @@ export function BeadStudio() {
 
           <div className="field-group">
             <label>色板</label>
-            <div className="select-like">通用暖色 · 16 色 <ChevronDown aria-hidden="true" /></div>
-            <small>首版为屏幕模拟色，实体颜色可能略有差异</small>
+            <div className="palette-card"><Palette aria-hidden="true" /><span><strong>通用暖色 · 16 色</strong><small>当前项目固定使用此色板</small></span></div>
+            <small>屏幕颜色仅供模拟，实体颜色可能因品牌与批次略有差异</small>
           </div>
 
-          {sourceUrl && <button className="primary-button full icon-label" onClick={() => void generateFromImage(sourceUrl, width, height, colorLimit)} disabled={isGenerating}><RefreshCw aria-hidden="true" />重新生成图纸</button>}
+          {sourceUrl && <button className="primary-button full icon-label" onClick={() => void generateFromImage(sourceUrl, clampGridSize(draftWidth), clampGridSize(draftHeight), colorLimit)} disabled={isGenerating}><RefreshCw aria-hidden="true" />重新生成图纸</button>}
         </aside>
 
         <section className="canvas-panel">
@@ -867,6 +1068,7 @@ export function BeadStudio() {
             ))}
           </div>
           <div className="material-footnote"><Info aria-hidden="true" /><p>建议按清单多准备约 10% 的豆子，避免制作中途缺色。</p></div>
+          <button className="quiet-button full icon-label" onClick={exportMaterialsCsv}><FileSpreadsheet aria-hidden="true" />导出材料 CSV</button>
           <button className="primary-button full icon-label" onClick={exportPng}><Download aria-hidden="true" />导出带色号 PNG</button>
         </aside>
       </section>

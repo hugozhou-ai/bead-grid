@@ -9,6 +9,10 @@
 
 ### Features
 
+- Add visible aspect-ratio locking, common grid presets, and 5 mm finished-size estimates.
+- Autosave editable projects locally and restore the latest draft on return.
+- Import validated JSON projects and export material lists as CSV with a 10% reserve estimate.
+- Preserve artwork when resizing imported or manually edited projects, including dimension-aware undo and redo.
 - Add click, drag-box, and long-press trajectory selection for existing beads.
 - Add a contextual batch toolbar for recoloring, removing, selecting all, and clearing selections.
 - Standardize all interface action icons on the Lucide icon library.
