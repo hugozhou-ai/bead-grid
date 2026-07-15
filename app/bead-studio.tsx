@@ -97,6 +97,17 @@ export function BeadStudio() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasScrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const touchPointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const touchGestureRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    scrollLeft: number;
+    scrollTop: number;
+    moved: boolean;
+  } | null>(null);
+  const pinchRef = useRef<{ distance: number; zoom: number } | null>(null);
+  const activeZoomRef = useRef(1);
   const canvasCellSize = Math.max(10, Math.min(24, 720 / Math.max(width, height)));
   const canvasBaseWidth = Math.round(width * canvasCellSize);
   const canvasBaseHeight = Math.round(height * canvasCellSize);
@@ -115,15 +126,21 @@ export function BeadStudio() {
   const total = counts.reduce((sum, item) => sum + item.count, 0);
 
   useEffect(() => {
+    activeZoomRef.current = activeZoom;
+  }, [activeZoom]);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const cell = canvasCellSize;
-    canvas.width = width * cell;
-    canvas.height = height * cell;
+    const pixelRatio = window.devicePixelRatio || 1;
+    const cell = canvasCellSize * activeZoom;
+    canvas.width = Math.round(canvasDisplayWidth * pixelRatio);
+    canvas.height = Math.round(canvasDisplayHeight * pixelRatio);
     const context = canvas.getContext("2d");
     if (!context) return;
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     context.fillStyle = "#f7f2e8";
-    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillRect(0, 0, canvasDisplayWidth, canvasDisplayHeight);
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {
         const code = grid[y * width + x];
@@ -152,7 +169,7 @@ export function BeadStudio() {
         }
       }
     }
-  }, [grid, width, height, colorMap, showCodes, showGrid, canvasCellSize]);
+  }, [grid, width, height, colorMap, showCodes, showGrid, canvasCellSize, activeZoom, canvasDisplayWidth, canvasDisplayHeight]);
 
   useEffect(() => {
     const scrollArea = canvasScrollRef.current;
@@ -173,6 +190,13 @@ export function BeadStudio() {
     observer.observe(scrollArea);
     return () => observer.disconnect();
   }, [canvasBaseWidth, canvasBaseHeight]);
+
+  useEffect(() => {
+    if (!isFitZoom) return;
+    const scrollArea = canvasScrollRef.current;
+    if (!scrollArea) return;
+    scrollArea.scrollTo({ left: 0, top: 0 });
+  }, [isFitZoom, fitZoom]);
 
   useEffect(() => {
     if (!toast) return;
@@ -203,12 +227,12 @@ export function BeadStudio() {
     setRedoStack((stack) => stack.slice(0, -1));
   }
 
-  function updateCell(event: PointerEvent<HTMLCanvasElement>) {
+  function updateCellAt(clientX: number, clientY: number) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const x = Math.floor(((event.clientX - rect.left) / rect.width) * width);
-    const y = Math.floor(((event.clientY - rect.top) / rect.height) * height);
+    const x = Math.floor(((clientX - rect.left) / rect.width) * width);
+    const y = Math.floor(((clientY - rect.top) / rect.height) * height);
     if (x < 0 || y < 0 || x >= width || y >= height) return;
     const index = y * width + x;
     if (tool === "pick") {
@@ -225,6 +249,80 @@ export function BeadStudio() {
     const next = [...grid];
     next[index] = value;
     commitGrid(next);
+  }
+
+  function handleCanvasPointerDown(event: PointerEvent<HTMLCanvasElement>) {
+    if (event.pointerType !== "touch") {
+      updateCellAt(event.clientX, event.clientY);
+      return;
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    touchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (touchPointersRef.current.size === 1) {
+      touchGestureRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        scrollLeft: canvasScrollRef.current?.scrollLeft ?? 0,
+        scrollTop: canvasScrollRef.current?.scrollTop ?? 0,
+        moved: false,
+      };
+      return;
+    }
+
+    const points = [...touchPointersRef.current.values()];
+    const distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+    pinchRef.current = { distance: Math.max(1, distance), zoom: activeZoomRef.current };
+    touchGestureRef.current = null;
+    setIsFitZoom(false);
+    setZoom(activeZoomRef.current);
+  }
+
+  function handleCanvasPointerMove(event: PointerEvent<HTMLCanvasElement>) {
+    if (event.pointerType !== "touch" || !touchPointersRef.current.has(event.pointerId)) return;
+    event.preventDefault();
+    touchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    const gesture = touchGestureRef.current;
+    if (touchPointersRef.current.size === 1 && gesture?.pointerId === event.pointerId) {
+      const deltaX = event.clientX - gesture.startX;
+      const deltaY = event.clientY - gesture.startY;
+      if (Math.hypot(deltaX, deltaY) > 8) gesture.moved = true;
+      if (gesture.moved && canvasScrollRef.current) {
+        canvasScrollRef.current.scrollLeft = gesture.scrollLeft - deltaX;
+        canvasScrollRef.current.scrollTop = gesture.scrollTop - deltaY;
+      }
+      return;
+    }
+
+    if (touchPointersRef.current.size < 2 || !pinchRef.current) return;
+    const points = [...touchPointersRef.current.values()];
+    const distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+    const nextZoom = Math.max(.2, Math.min(2.2, pinchRef.current.zoom * distance / pinchRef.current.distance));
+    activeZoomRef.current = nextZoom;
+    setZoom(nextZoom);
+  }
+
+  function handleCanvasPointerEnd(event: PointerEvent<HTMLCanvasElement>, cancelled = false) {
+    if (event.pointerType !== "touch") return;
+    const gesture = touchGestureRef.current;
+    if (!cancelled && gesture?.pointerId === event.pointerId && !gesture.moved && touchPointersRef.current.size === 1) {
+      updateCellAt(event.clientX, event.clientY);
+    }
+    touchPointersRef.current.delete(event.pointerId);
+    touchGestureRef.current = null;
+    if (touchPointersRef.current.size < 2) pinchRef.current = null;
+  }
+
+  function handleCanvasWheel(event: React.WheelEvent<HTMLDivElement>) {
+    if (!event.metaKey && !event.ctrlKey) return;
+    event.preventDefault();
+    const factor = Math.exp(-event.deltaY * .002);
+    const nextZoom = Math.max(.2, Math.min(2.2, activeZoomRef.current * factor));
+    activeZoomRef.current = nextZoom;
+    setZoom(nextZoom);
+    setIsFitZoom(false);
   }
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -426,22 +524,25 @@ export function BeadStudio() {
 
           <div className="canvas-stage">
             <div className="ruler-label top">{width} BEADS</div>
-            <div ref={canvasScrollRef} className="canvas-scroll">
-              <div className="canvas-scroll-content">
+            <div ref={canvasScrollRef} className="canvas-scroll" onWheel={handleCanvasWheel}>
+              <div className={`canvas-scroll-content ${isFitZoom ? "fit" : "manual"}`}>
                 <canvas
                   ref={canvasRef}
                   className={`bead-canvas tool-${tool}`}
                   style={{ width: `${canvasDisplayWidth}px`, height: `${canvasDisplayHeight}px` }}
-                  onPointerDown={updateCell}
+                  onPointerDown={handleCanvasPointerDown}
+                  onPointerMove={handleCanvasPointerMove}
+                  onPointerUp={handleCanvasPointerEnd}
+                  onPointerCancel={(event) => handleCanvasPointerEnd(event, true)}
                   aria-label={`${width} 乘 ${height} 拼豆画布`}
                 />
               </div>
             </div>
-            <div className="zoom-control">
-              <button aria-label="缩小画布" onClick={() => { setZoom(Math.max(.2, activeZoom - .15)); setIsFitZoom(false); }}>−</button>
-              <button className={isFitZoom ? "fit-active" : ""} onClick={() => setIsFitZoom(true)}>适应</button>
+            <div className="zoom-control" title="双指缩放，或使用 Cmd/Ctrl + 滚轮">
+              <button aria-label="缩小画布" onClick={() => { const nextZoom = Math.max(.2, activeZoomRef.current - .15); activeZoomRef.current = nextZoom; setZoom(nextZoom); setIsFitZoom(false); }}>−</button>
+              <button className={isFitZoom ? "fit-active" : ""} onClick={() => { activeZoomRef.current = fitZoom; setIsFitZoom(true); }}>适应</button>
               <span>{Math.round(activeZoom * 100)}%</span>
-              <button aria-label="放大画布" onClick={() => { setZoom(Math.min(2.2, activeZoom + .15)); setIsFitZoom(false); }}>＋</button>
+              <button aria-label="放大画布" onClick={() => { const nextZoom = Math.min(2.2, activeZoomRef.current + .15); activeZoomRef.current = nextZoom; setZoom(nextZoom); setIsFitZoom(false); }}>＋</button>
             </div>
           </div>
 

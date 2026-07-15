@@ -11,6 +11,10 @@
 
 - Fit the entire canvas into the available desktop or mobile workspace by default.
 - Keep every edge of a manually zoomed canvas reachable inside the scroll area.
+- Center fit-mode canvases against the mobile viewport instead of their intrinsic content width.
+- Redraw the canvas at the active zoom and device pixel ratio so bead labels remain sharp.
+- Add two-finger pinch zoom on touch devices and Command/Control plus wheel zoom on desktop.
+- Add one-finger canvas panning while preserving tap-to-edit behavior on touch devices.
 
 ## 0.1.0 - 2026-07-15
 
