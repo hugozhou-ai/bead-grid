@@ -8,6 +8,7 @@
 - 支持 8×8 至 80×80 的图纸尺寸
 - 自动匹配通用 16 色拼豆色板并限制颜色数量
 - 画笔、橡皮、吸管、撤销和重做
+- 单击选择、拖拽框选、长按轨迹选择和批量填色/移除
 - 网格、色号和缩放控制
 - 实时材料用量统计
 - 导出带网格和色号的 PNG
@@ -43,6 +44,7 @@ npm run test:pages
 - Next.js 兼容 App Router
 - vinext + Vite
 - Canvas 2D 图片处理和图纸绘制
+- Lucide React 统一界面图标
 - Cloudflare Worker 兼容构建
 
 ## 隐私说明

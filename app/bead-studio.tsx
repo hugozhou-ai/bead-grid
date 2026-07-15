@@ -1,6 +1,30 @@
 "use client";
 
 import { ChangeEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Check,
+  ChevronDown,
+  Download,
+  Eraser,
+  FileJson,
+  ImagePlus,
+  Info,
+  Maximize2,
+  Minus,
+  MousePointer2,
+  PaintBucket,
+  Pencil,
+  Pipette,
+  Plus,
+  Redo2,
+  RefreshCw,
+  Scan,
+  ShieldCheck,
+  Trash2,
+  Undo2,
+  X,
+} from "lucide-react";
+import { addSelectionLine, getRectangleSelection } from "./selection";
 
 type BeadColor = {
   code: string;
@@ -8,7 +32,18 @@ type BeadColor = {
   hex: string;
 };
 
-type Tool = "paint" | "erase" | "pick";
+type Tool = "paint" | "erase" | "pick" | "select";
+
+type SelectionGesture = {
+  pointerId: number;
+  startIndex: number;
+  lastIndex: number;
+  startX: number;
+  startY: number;
+  baseSelection: Set<number>;
+  additive: boolean;
+  mode: "pending" | "rectangle" | "trace";
+};
 
 const PALETTE: BeadColor[] = [
   { code: "A01", name: "奶油白", hex: "#F7F1E3" },
@@ -94,6 +129,7 @@ export function BeadStudio() {
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [undoStack, setUndoStack] = useState<Array<Array<string | null>>>([]);
   const [redoStack, setRedoStack] = useState<Array<Array<string | null>>>([]);
+  const [selectedCells, setSelectedCells] = useState<Set<number>>(() => new Set());
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasScrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -109,6 +145,9 @@ export function BeadStudio() {
   const pinchRef = useRef<{ distance: number; zoom: number } | null>(null);
   const safariGestureZoomRef = useRef(1);
   const activeZoomRef = useRef(1);
+  const selectedCellsRef = useRef(new Set<number>());
+  const selectionGestureRef = useRef<SelectionGesture | null>(null);
+  const selectionLongPressTimerRef = useRef<number | null>(null);
   const canvasCellSize = Math.max(10, Math.min(24, 720 / Math.max(width, height)));
   const canvasBaseWidth = Math.round(width * canvasCellSize);
   const canvasBaseHeight = Math.round(height * canvasCellSize);
@@ -168,9 +207,19 @@ export function BeadStudio() {
           context.lineWidth = 1;
           context.strokeRect(x * cell, y * cell, cell, cell);
         }
+        if (selectedCells.has(y * width + x)) {
+          const inset = Math.max(1.5, cell * .08);
+          context.fillStyle = "rgba(240,100,52,.2)";
+          context.fillRect(x * cell, y * cell, cell, cell);
+          context.strokeStyle = "#f06434";
+          context.lineWidth = Math.max(1.5, cell * .07);
+          context.setLineDash([Math.max(2, cell * .18), Math.max(1, cell * .1)]);
+          context.strokeRect(x * cell + inset, y * cell + inset, cell - inset * 2, cell - inset * 2);
+          context.setLineDash([]);
+        }
       }
     }
-  }, [grid, width, height, colorMap, showCodes, showGrid, canvasCellSize, activeZoom, canvasDisplayWidth, canvasDisplayHeight]);
+  }, [grid, width, height, colorMap, showCodes, showGrid, selectedCells, canvasCellSize, activeZoom, canvasDisplayWidth, canvasDisplayHeight]);
 
   useEffect(() => {
     const scrollArea = canvasScrollRef.current;
@@ -249,10 +298,28 @@ export function BeadStudio() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  function commitGrid(next: Array<string | null>, message?: string) {
+  function updateSelection(next: Set<number>) {
+    selectedCellsRef.current = next;
+    setSelectedCells(next);
+  }
+
+  function clearSelectionTimer() {
+    if (selectionLongPressTimerRef.current !== null) {
+      window.clearTimeout(selectionLongPressTimerRef.current);
+      selectionLongPressTimerRef.current = null;
+    }
+  }
+
+  function cancelSelectionGesture() {
+    clearSelectionTimer();
+    selectionGestureRef.current = null;
+  }
+
+  function commitGrid(next: Array<string | null>, message?: string, preserveSelection = false) {
     setUndoStack((stack) => [...stack.slice(-29), grid]);
     setRedoStack([]);
     setGrid(next);
+    if (!preserveSelection) updateSelection(new Set());
     if (message) setToast(message);
   }
 
@@ -272,14 +339,64 @@ export function BeadStudio() {
     setRedoStack((stack) => stack.slice(0, -1));
   }
 
-  function updateCellAt(clientX: number, clientY: number) {
+  function getCellAt(clientX: number, clientY: number) {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     const x = Math.floor(((clientX - rect.left) / rect.width) * width);
     const y = Math.floor(((clientY - rect.top) / rect.height) * height);
-    if (x < 0 || y < 0 || x >= width || y >= height) return;
-    const index = y * width + x;
+    if (x < 0 || y < 0 || x >= width || y >= height) return null;
+    return { x, y, index: y * width + x };
+  }
+
+  function selectRectangle(startIndex: number, endIndex: number, baseSelection: Set<number>, additive: boolean) {
+    updateSelection(getRectangleSelection(startIndex, endIndex, width, grid, baseSelection, additive));
+  }
+
+  function selectLine(fromIndex: number, toIndex: number) {
+    updateSelection(addSelectionLine(fromIndex, toIndex, width, grid, selectedCellsRef.current));
+  }
+
+  function fillSelection() {
+    if (!selectedCellsRef.current.size) return;
+    const next = [...grid];
+    selectedCellsRef.current.forEach((index) => { next[index] = selectedColor; });
+    commitGrid(next, `已将 ${selectedCellsRef.current.size} 颗豆子填为 ${selectedColor}`, true);
+  }
+
+  function eraseSelection() {
+    if (!selectedCellsRef.current.size) return;
+    const count = selectedCellsRef.current.size;
+    const next = [...grid];
+    selectedCellsRef.current.forEach((index) => { next[index] = null; });
+    commitGrid(next, `已移除 ${count} 颗豆子`);
+  }
+
+  function selectAllBeads() {
+    updateSelection(new Set(grid.flatMap((code, index) => code ? [index] : [])));
+    setTool("select");
+  }
+
+  function handleCanvasKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      updateSelection(new Set());
+      return;
+    }
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") {
+      event.preventDefault();
+      selectAllBeads();
+      return;
+    }
+    if ((event.key === "Backspace" || event.key === "Delete") && selectedCellsRef.current.size) {
+      event.preventDefault();
+      eraseSelection();
+    }
+  }
+
+  function updateCellAt(clientX: number, clientY: number) {
+    const cell = getCellAt(clientX, clientY);
+    if (!cell) return;
+    const { index } = cell;
     if (tool === "pick") {
       const code = grid[index];
       if (code) {
@@ -296,14 +413,98 @@ export function BeadStudio() {
     commitGrid(next);
   }
 
+  function startSelectionGesture(event: PointerEvent<HTMLDivElement>, index: number) {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    clearSelectionTimer();
+    selectionGestureRef.current = {
+      pointerId: event.pointerId,
+      startIndex: index,
+      lastIndex: index,
+      startX: event.clientX,
+      startY: event.clientY,
+      baseSelection: new Set(selectedCellsRef.current),
+      additive: event.shiftKey || event.metaKey || event.ctrlKey,
+      mode: "pending",
+    };
+    selectionLongPressTimerRef.current = window.setTimeout(() => {
+      const gesture = selectionGestureRef.current;
+      if (!gesture || gesture.pointerId !== event.pointerId || gesture.mode !== "pending") return;
+      gesture.mode = "trace";
+      const next = new Set(gesture.baseSelection);
+      if (grid[gesture.startIndex]) next.add(gesture.startIndex);
+      updateSelection(next);
+      setToast("长按选择：沿着豆子移动即可连续选中");
+    }, 420);
+  }
+
+  function moveSelectionGesture(event: PointerEvent<HTMLDivElement>) {
+    const gesture = selectionGestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return false;
+    const cell = getCellAt(event.clientX, event.clientY);
+    const distance = Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY);
+    if (gesture.mode === "pending" && distance > 6) {
+      gesture.mode = "rectangle";
+      clearSelectionTimer();
+    }
+    if (!cell) return true;
+    if (gesture.mode === "rectangle") {
+      selectRectangle(gesture.startIndex, cell.index, gesture.baseSelection, gesture.additive);
+    } else if (gesture.mode === "trace" && cell.index !== gesture.lastIndex) {
+      selectLine(gesture.lastIndex, cell.index);
+    }
+    gesture.lastIndex = cell.index;
+    return true;
+  }
+
+  function finishSelectionGesture(event: PointerEvent<HTMLDivElement>, cancelled: boolean) {
+    const gesture = selectionGestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return false;
+    clearSelectionTimer();
+    if (!cancelled && gesture.mode === "pending") {
+      const next = new Set(gesture.baseSelection);
+      if (grid[gesture.startIndex]) {
+        if (next.has(gesture.startIndex)) next.delete(gesture.startIndex);
+        else next.add(gesture.startIndex);
+      } else if (!gesture.additive) {
+        next.clear();
+      }
+      updateSelection(next);
+    }
+    selectionGestureRef.current = null;
+    return true;
+  }
+
   function handleCanvasPointerDown(event: PointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== "touch" && event.button !== 0) return;
+    event.currentTarget.focus({ preventScroll: true });
+    if (event.pointerType === "touch") {
+      event.currentTarget.setPointerCapture(event.pointerId);
+      touchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    }
+
+    if (touchPointersRef.current.size > 1) {
+      cancelSelectionGesture();
+      const points = [...touchPointersRef.current.values()];
+      const distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+      pinchRef.current = { distance: Math.max(1, distance), zoom: activeZoomRef.current };
+      touchGestureRef.current = null;
+      setIsFitZoom(false);
+      setZoom(activeZoomRef.current);
+      return;
+    }
+
+    if (tool === "select") {
+      const cell = getCellAt(event.clientX, event.clientY);
+      if (cell) startSelectionGesture(event, cell.index);
+      else if (!event.shiftKey && !event.metaKey && !event.ctrlKey) updateSelection(new Set());
+      return;
+    }
+
     if (event.pointerType !== "touch") {
       updateCellAt(event.clientX, event.clientY);
       return;
     }
 
-    event.currentTarget.setPointerCapture(event.pointerId);
-    touchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (touchPointersRef.current.size === 1) {
       touchGestureRef.current = {
         pointerId: event.pointerId,
@@ -313,21 +514,26 @@ export function BeadStudio() {
         scrollTop: canvasScrollRef.current?.scrollTop ?? 0,
         moved: false,
       };
-      return;
     }
-
-    const points = [...touchPointersRef.current.values()];
-    const distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
-    pinchRef.current = { distance: Math.max(1, distance), zoom: activeZoomRef.current };
-    touchGestureRef.current = null;
-    setIsFitZoom(false);
-    setZoom(activeZoomRef.current);
   }
 
   function handleCanvasPointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (event.pointerType === "touch" && touchPointersRef.current.has(event.pointerId)) {
+      event.preventDefault();
+      touchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    }
+
+    if (touchPointersRef.current.size >= 2 && pinchRef.current) {
+      const points = [...touchPointersRef.current.values()];
+      const distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+      const nextZoom = Math.max(.2, Math.min(2.2, pinchRef.current.zoom * distance / pinchRef.current.distance));
+      activeZoomRef.current = nextZoom;
+      setZoom(nextZoom);
+      return;
+    }
+
+    if (moveSelectionGesture(event)) return;
     if (event.pointerType !== "touch" || !touchPointersRef.current.has(event.pointerId)) return;
-    event.preventDefault();
-    touchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
     const gesture = touchGestureRef.current;
     if (touchPointersRef.current.size === 1 && gesture?.pointerId === event.pointerId) {
@@ -341,23 +547,19 @@ export function BeadStudio() {
       return;
     }
 
-    if (touchPointersRef.current.size < 2 || !pinchRef.current) return;
-    const points = [...touchPointersRef.current.values()];
-    const distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
-    const nextZoom = Math.max(.2, Math.min(2.2, pinchRef.current.zoom * distance / pinchRef.current.distance));
-    activeZoomRef.current = nextZoom;
-    setZoom(nextZoom);
   }
 
   function handleCanvasPointerEnd(event: PointerEvent<HTMLDivElement>, cancelled = false) {
-    if (event.pointerType !== "touch") return;
-    const gesture = touchGestureRef.current;
-    if (!cancelled && gesture?.pointerId === event.pointerId && !gesture.moved && touchPointersRef.current.size === 1) {
-      updateCellAt(event.clientX, event.clientY);
+    const handledSelection = finishSelectionGesture(event, cancelled);
+    if (event.pointerType === "touch") {
+      const gesture = touchGestureRef.current;
+      if (!handledSelection && !cancelled && gesture?.pointerId === event.pointerId && !gesture.moved && touchPointersRef.current.size === 1) {
+        updateCellAt(event.clientX, event.clientY);
+      }
+      touchPointersRef.current.delete(event.pointerId);
+      touchGestureRef.current = null;
+      if (touchPointersRef.current.size < 2) pinchRef.current = null;
     }
-    touchPointersRef.current.delete(event.pointerId);
-    touchGestureRef.current = null;
-    if (touchPointersRef.current.size < 2) pinchRef.current = null;
   }
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -487,9 +689,9 @@ export function BeadStudio() {
           <span>豆格</span><small>BEAD GRID</small>
         </a>
         <div className="header-actions">
-          <span className="privacy-note"><span className="status-dot" /> 图片仅在本机处理</span>
-          <button className="quiet-button" onClick={exportProject}>保存项目</button>
-          <button className="primary-button compact" onClick={exportPng}>导出图纸</button>
+          <span className="privacy-note"><ShieldCheck aria-hidden="true" /> 图片仅在本机处理</span>
+          <button className="quiet-button icon-label" onClick={exportProject}><FileJson aria-hidden="true" />保存项目</button>
+          <button className="primary-button compact icon-label" onClick={exportPng}><Download aria-hidden="true" />导出图纸</button>
         </div>
       </header>
 
@@ -510,7 +712,7 @@ export function BeadStudio() {
 
           <input ref={fileInputRef} className="sr-only" type="file" accept="image/*" onChange={handleUpload} />
           <button className="upload-card" onClick={() => fileInputRef.current?.click()} disabled={isGenerating}>
-            <span className="upload-icon">＋</span>
+            <span className="upload-icon"><ImagePlus aria-hidden="true" /></span>
             <strong>{isGenerating ? "正在分析颜色…" : "上传一张图片"}</strong>
             <small>JPG、PNG、WEBP · 自动居中裁剪</small>
           </button>
@@ -522,7 +724,7 @@ export function BeadStudio() {
               <input aria-label="横向豆子数量" type="number" min="8" max="80" value={width} onChange={(e) => setWidth(Number(e.target.value))} />
               <b>×</b>
               <input aria-label="纵向豆子数量" type="number" min="8" max="80" value={height} onChange={(e) => setHeight(Number(e.target.value))} />
-              <button onClick={applySize}>应用</button>
+              <button className="icon-label" onClick={applySize}><Check aria-hidden="true" />应用</button>
             </div>
             <small>支持 8–80 格，数字越大细节越丰富</small>
           </div>
@@ -535,33 +737,50 @@ export function BeadStudio() {
 
           <div className="field-group">
             <label>色板</label>
-            <div className="select-like">通用暖色 · 16 色 <span>⌄</span></div>
+            <div className="select-like">通用暖色 · 16 色 <ChevronDown aria-hidden="true" /></div>
             <small>首版为屏幕模拟色，实体颜色可能略有差异</small>
           </div>
 
-          {sourceUrl && <button className="primary-button full" onClick={() => void generateFromImage(sourceUrl, width, height, colorLimit)} disabled={isGenerating}>重新生成图纸</button>}
+          {sourceUrl && <button className="primary-button full icon-label" onClick={() => void generateFromImage(sourceUrl, width, height, colorLimit)} disabled={isGenerating}><RefreshCw aria-hidden="true" />重新生成图纸</button>}
         </aside>
 
         <section className="canvas-panel">
           <div className="canvas-toolbar">
             <div className="tool-group" role="group" aria-label="编辑工具">
-              <button className={tool === "paint" ? "active" : ""} onClick={() => setTool("paint")}><span>✎</span>画笔</button>
-              <button className={tool === "erase" ? "active" : ""} onClick={() => setTool("erase")}><span>◇</span>橡皮</button>
-              <button className={tool === "pick" ? "active" : ""} onClick={() => setTool("pick")}><span>◉</span>吸管</button>
+              <button className={tool === "paint" ? "active" : ""} onClick={() => setTool("paint")}><Pencil aria-hidden="true" />画笔</button>
+              <button className={tool === "erase" ? "active" : ""} onClick={() => setTool("erase")}><Eraser aria-hidden="true" />橡皮</button>
+              <button className={tool === "pick" ? "active" : ""} onClick={() => setTool("pick")}><Pipette aria-hidden="true" />吸管</button>
+              <button className={tool === "select" ? "active" : ""} onClick={() => setTool("select")}><MousePointer2 aria-hidden="true" />选择</button>
             </div>
             <div className="toolbar-right">
-              <button title="撤销" aria-label="撤销" onClick={undo} disabled={!undoStack.length}>↶</button>
-              <button title="重做" aria-label="重做" onClick={redo} disabled={!redoStack.length}>↷</button>
+              <button title="撤销" aria-label="撤销" onClick={undo} disabled={!undoStack.length}><Undo2 aria-hidden="true" /></button>
+              <button title="重做" aria-label="重做" onClick={redo} disabled={!redoStack.length}><Redo2 aria-hidden="true" /></button>
               <label className="toggle"><input type="checkbox" checked={showCodes} onChange={(e) => setShowCodes(e.target.checked)} /><span />色号</label>
               <label className="toggle"><input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /><span />网格</label>
             </div>
           </div>
 
           <div className="canvas-stage">
+            {selectedCells.size > 0 && (
+              <div className="selection-actions" role="toolbar" aria-label="所选豆子操作">
+                <strong><MousePointer2 aria-hidden="true" />{selectedCells.size} 颗已选</strong>
+                <button onClick={fillSelection}><PaintBucket aria-hidden="true" />填为 {selectedColor}</button>
+                <button className="danger" onClick={eraseSelection}><Trash2 aria-hidden="true" />移除</button>
+                <button onClick={selectAllBeads}><Scan aria-hidden="true" />全选</button>
+                <button className="icon-only" aria-label="取消选择" title="取消选择" onClick={() => updateSelection(new Set())}><X aria-hidden="true" /></button>
+              </div>
+            )}
+            {tool === "select" && selectedCells.size === 0 && (
+              <div className="selection-hint"><MousePointer2 aria-hidden="true" />拖拽框选；长按后沿轨迹连续选择</div>
+            )}
             <div className="ruler-label top">{width} BEADS</div>
             <div
               ref={canvasScrollRef}
-              className="canvas-scroll"
+              className={`canvas-scroll${selectedCells.size ? " has-selection" : ""}`}
+              tabIndex={0}
+              aria-label="拼豆画布工作区"
+              onKeyDown={handleCanvasKeyDown}
+              onContextMenu={(event) => event.preventDefault()}
               onPointerDown={handleCanvasPointerDown}
               onPointerMove={handleCanvasPointerMove}
               onPointerUp={handleCanvasPointerEnd}
@@ -577,10 +796,10 @@ export function BeadStudio() {
               </div>
             </div>
             <div className="zoom-control" title="双指缩放，或使用 Cmd/Ctrl + 滚轮">
-              <button aria-label="缩小画布" onClick={() => { const nextZoom = Math.max(.2, activeZoomRef.current - .15); activeZoomRef.current = nextZoom; setZoom(nextZoom); setIsFitZoom(false); }}>−</button>
-              <button className={isFitZoom ? "fit-active" : ""} onClick={() => { activeZoomRef.current = fitZoom; setIsFitZoom(true); }}>适应</button>
+              <button aria-label="缩小画布" onClick={() => { const nextZoom = Math.max(.2, activeZoomRef.current - .15); activeZoomRef.current = nextZoom; setZoom(nextZoom); setIsFitZoom(false); }}><Minus aria-hidden="true" /></button>
+              <button className={isFitZoom ? "fit-active" : ""} onClick={() => { activeZoomRef.current = fitZoom; setIsFitZoom(true); }}><Maximize2 aria-hidden="true" />适应</button>
               <span>{Math.round(activeZoom * 100)}%</span>
-              <button aria-label="放大画布" onClick={() => { const nextZoom = Math.min(2.2, activeZoomRef.current + .15); activeZoomRef.current = nextZoom; setZoom(nextZoom); setIsFitZoom(false); }}>＋</button>
+              <button aria-label="放大画布" onClick={() => { const nextZoom = Math.min(2.2, activeZoomRef.current + .15); activeZoomRef.current = nextZoom; setZoom(nextZoom); setIsFitZoom(false); }}><Plus aria-hidden="true" /></button>
             </div>
           </div>
 
@@ -592,7 +811,7 @@ export function BeadStudio() {
                   key={color.code}
                   className={selectedColor === color.code ? "selected" : ""}
                   style={{ "--swatch": color.hex } as React.CSSProperties}
-                  onClick={() => { setSelectedColor(color.code); setTool("paint"); }}
+                  onClick={() => { setSelectedColor(color.code); if (!selectedCellsRef.current.size) setTool("paint"); }}
                   title={`${color.code} ${color.name}`}
                   aria-label={`${color.code} ${color.name}`}
                 ><span>{color.code}</span></button>
@@ -613,15 +832,15 @@ export function BeadStudio() {
           </div>
           <div className="material-list">
             {counts.map(({ color, count }) => (
-              <button key={color.code} onClick={() => { setSelectedColor(color.code); setTool("paint"); }}>
+              <button key={color.code} onClick={() => { setSelectedColor(color.code); if (!selectedCellsRef.current.size) setTool("paint"); }}>
                 <i style={{ background: color.hex }} />
                 <span><strong>{color.code}</strong><small>{color.name}</small></span>
                 <b>{count}</b>
               </button>
             ))}
           </div>
-          <div className="material-footnote"><span>＋</span><p>建议按清单多准备约 10% 的豆子，避免制作中途缺色。</p></div>
-          <button className="primary-button full" onClick={exportPng}>导出带色号 PNG</button>
+          <div className="material-footnote"><Info aria-hidden="true" /><p>建议按清单多准备约 10% 的豆子，避免制作中途缺色。</p></div>
+          <button className="primary-button full icon-label" onClick={exportPng}><Download aria-hidden="true" />导出带色号 PNG</button>
         </aside>
       </section>
 

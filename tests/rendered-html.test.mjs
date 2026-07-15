@@ -38,3 +38,13 @@ test("keeps browser zoom interception scoped to the canvas workspace", async () 
   assert.match(source, /scrollArea\.addEventListener\("gesturechange", handleGestureChange, \{ passive: false \}\)/);
   assert.doesNotMatch(source, /onWheel=/);
 });
+
+test("uses one icon library and exposes batch selection controls", async () => {
+  const source = await readFile(new URL("../app/bead-studio.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /from "lucide-react"/);
+  assert.match(source, /"rectangle" \| "trace"/);
+  assert.match(source, /长按选择：沿着豆子移动即可连续选中/);
+  assert.match(source, /aria-label="所选豆子操作"/);
+  assert.doesNotMatch(source, /✎|◇|◉|↶|↷|⌄/);
+});

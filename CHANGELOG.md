@@ -7,6 +7,12 @@
 - Add automatic GitHub Pages deployment for every push to `main`.
 - Add a dedicated static export build and verification test for the `/bead-grid` base path.
 
+### Features
+
+- Add click, drag-box, and long-press trajectory selection for existing beads.
+- Add a contextual batch toolbar for recoloring, removing, selecting all, and clearing selections.
+- Standardize all interface action icons on the Lucide icon library.
+
 ### Fixes
 
 - Fit the entire canvas into the available desktop or mobile workspace by default.
