@@ -15,6 +15,7 @@
 - Redraw the canvas at the active zoom and device pixel ratio so bead labels remain sharp.
 - Add two-finger pinch zoom on touch devices and Command/Control plus wheel zoom on desktop.
 - Add one-finger canvas panning while preserving tap-to-edit behavior on touch devices.
+- Prevent browser-level zoom while wheel or trackpad gestures originate inside the canvas workspace.
 
 ## 0.1.0 - 2026-07-15
 

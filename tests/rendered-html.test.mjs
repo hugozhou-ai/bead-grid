@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function render() {
@@ -28,4 +29,12 @@ test("server-renders the Bead Grid application", async () => {
   assert.match(html, />适应<\/button>/);
   assert.doesNotMatch(html, /transform:\s*scale/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Starter Project/);
+});
+
+test("keeps browser zoom interception scoped to the canvas workspace", async () => {
+  const source = await readFile(new URL("../app/bead-studio.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /scrollArea\.addEventListener\("wheel", handleWheel, \{ passive: false \}\)/);
+  assert.match(source, /scrollArea\.addEventListener\("gesturechange", handleGestureChange, \{ passive: false \}\)/);
+  assert.doesNotMatch(source, /onWheel=/);
 });

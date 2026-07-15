@@ -107,6 +107,7 @@ export function BeadStudio() {
     moved: boolean;
   } | null>(null);
   const pinchRef = useRef<{ distance: number; zoom: number } | null>(null);
+  const safariGestureZoomRef = useRef(1);
   const activeZoomRef = useRef(1);
   const canvasCellSize = Math.max(10, Math.min(24, 720 / Math.max(width, height)));
   const canvasBaseWidth = Math.round(width * canvasCellSize);
@@ -199,6 +200,50 @@ export function BeadStudio() {
   }, [isFitZoom, fitZoom]);
 
   useEffect(() => {
+    const scrollArea = canvasScrollRef.current;
+    if (!scrollArea) return;
+
+    const applyZoom = (nextZoom: number) => {
+      const clampedZoom = Math.max(.2, Math.min(2.2, nextZoom));
+      activeZoomRef.current = clampedZoom;
+      setZoom(clampedZoom);
+      setIsFitZoom(false);
+    };
+    const preventPageZoom = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    const handleWheel = (event: WheelEvent) => {
+      if (!event.metaKey && !event.ctrlKey) return;
+      preventPageZoom(event);
+      applyZoom(activeZoomRef.current * Math.exp(-event.deltaY * .002));
+    };
+    const handleGestureStart = (event: Event) => {
+      preventPageZoom(event);
+      safariGestureZoomRef.current = activeZoomRef.current;
+    };
+    const handleGestureChange = (event: Event) => {
+      preventPageZoom(event);
+      const scale = (event as Event & { scale?: number }).scale ?? 1;
+      applyZoom(safariGestureZoomRef.current * scale);
+    };
+    const handleGestureEnd = (event: Event) => {
+      preventPageZoom(event);
+    };
+
+    scrollArea.addEventListener("wheel", handleWheel, { passive: false });
+    scrollArea.addEventListener("gesturestart", handleGestureStart, { passive: false });
+    scrollArea.addEventListener("gesturechange", handleGestureChange, { passive: false });
+    scrollArea.addEventListener("gestureend", handleGestureEnd, { passive: false });
+    return () => {
+      scrollArea.removeEventListener("wheel", handleWheel);
+      scrollArea.removeEventListener("gesturestart", handleGestureStart);
+      scrollArea.removeEventListener("gesturechange", handleGestureChange);
+      scrollArea.removeEventListener("gestureend", handleGestureEnd);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(""), 3200);
     return () => window.clearTimeout(timer);
@@ -251,7 +296,7 @@ export function BeadStudio() {
     commitGrid(next);
   }
 
-  function handleCanvasPointerDown(event: PointerEvent<HTMLCanvasElement>) {
+  function handleCanvasPointerDown(event: PointerEvent<HTMLDivElement>) {
     if (event.pointerType !== "touch") {
       updateCellAt(event.clientX, event.clientY);
       return;
@@ -279,7 +324,7 @@ export function BeadStudio() {
     setZoom(activeZoomRef.current);
   }
 
-  function handleCanvasPointerMove(event: PointerEvent<HTMLCanvasElement>) {
+  function handleCanvasPointerMove(event: PointerEvent<HTMLDivElement>) {
     if (event.pointerType !== "touch" || !touchPointersRef.current.has(event.pointerId)) return;
     event.preventDefault();
     touchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -304,7 +349,7 @@ export function BeadStudio() {
     setZoom(nextZoom);
   }
 
-  function handleCanvasPointerEnd(event: PointerEvent<HTMLCanvasElement>, cancelled = false) {
+  function handleCanvasPointerEnd(event: PointerEvent<HTMLDivElement>, cancelled = false) {
     if (event.pointerType !== "touch") return;
     const gesture = touchGestureRef.current;
     if (!cancelled && gesture?.pointerId === event.pointerId && !gesture.moved && touchPointersRef.current.size === 1) {
@@ -313,16 +358,6 @@ export function BeadStudio() {
     touchPointersRef.current.delete(event.pointerId);
     touchGestureRef.current = null;
     if (touchPointersRef.current.size < 2) pinchRef.current = null;
-  }
-
-  function handleCanvasWheel(event: React.WheelEvent<HTMLDivElement>) {
-    if (!event.metaKey && !event.ctrlKey) return;
-    event.preventDefault();
-    const factor = Math.exp(-event.deltaY * .002);
-    const nextZoom = Math.max(.2, Math.min(2.2, activeZoomRef.current * factor));
-    activeZoomRef.current = nextZoom;
-    setZoom(nextZoom);
-    setIsFitZoom(false);
   }
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -524,16 +559,19 @@ export function BeadStudio() {
 
           <div className="canvas-stage">
             <div className="ruler-label top">{width} BEADS</div>
-            <div ref={canvasScrollRef} className="canvas-scroll" onWheel={handleCanvasWheel}>
+            <div
+              ref={canvasScrollRef}
+              className="canvas-scroll"
+              onPointerDown={handleCanvasPointerDown}
+              onPointerMove={handleCanvasPointerMove}
+              onPointerUp={handleCanvasPointerEnd}
+              onPointerCancel={(event) => handleCanvasPointerEnd(event, true)}
+            >
               <div className={`canvas-scroll-content ${isFitZoom ? "fit" : "manual"}`}>
                 <canvas
                   ref={canvasRef}
                   className={`bead-canvas tool-${tool}`}
                   style={{ width: `${canvasDisplayWidth}px`, height: `${canvasDisplayHeight}px` }}
-                  onPointerDown={handleCanvasPointerDown}
-                  onPointerMove={handleCanvasPointerMove}
-                  onPointerUp={handleCanvasPointerEnd}
-                  onPointerCancel={(event) => handleCanvasPointerEnd(event, true)}
                   aria-label={`${width} 乘 ${height} 拼豆画布`}
                 />
               </div>
