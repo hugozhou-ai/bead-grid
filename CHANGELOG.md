@@ -9,6 +9,8 @@
 
 ### Features
 
+- Redesign the complete interface with warm sketchbook paper, fountain-pen linework, irregular hand-drawn controls, and a matching social preview card.
+- Render beads and grid lines with deterministic hand-inked variations while preserving color-code readability at every zoom level.
 - Add visible aspect-ratio locking, common grid presets, and 5 mm finished-size estimates.
 - Autosave editable projects locally and restore the latest draft on return.
 - Import validated JSON projects and export material lists as CSV with a 10% reserve estimate.

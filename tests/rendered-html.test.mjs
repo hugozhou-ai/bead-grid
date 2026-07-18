@@ -45,6 +45,17 @@ test("provides project persistence and non-destructive resizing", async () => {
   assert.doesNotMatch(source, /else commitGrid\(createDemo/);
 });
 
+test("uses the hand-inked visual system across the page and canvas", async () => {
+  const source = await readFile(new URL("../app/bead-studio.tsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(styles, /--pen-font:/);
+  assert.match(styles, /repeating-linear-gradient/);
+  assert.match(styles, /border-radius: 46% 54% 49% 51%/);
+  assert.match(source, /context\.ellipse\(centerX, centerY/);
+  assert.match(source, /const wobble =/);
+});
+
 test("keeps browser zoom interception scoped to the canvas workspace", async () => {
   const source = await readFile(new URL("../app/bead-studio.tsx", import.meta.url), "utf8");
 

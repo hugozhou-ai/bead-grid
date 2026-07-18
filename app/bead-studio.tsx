@@ -292,33 +292,34 @@ export function BeadStudio() {
     const context = canvas.getContext("2d");
     if (!context) return;
     context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-    context.fillStyle = "#f7f2e8";
+    context.fillStyle = "#fbf7e9";
     context.fillRect(0, 0, canvasDisplayWidth, canvasDisplayHeight);
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {
         const code = grid[y * width + x];
         if (code) {
           const color = colorMap.get(code);
+          const wobble = ((x * 17 + y * 31) % 7 - 3) / 100;
+          const centerX = x * cell + cell / 2 + wobble * cell;
+          const centerY = y * cell + cell / 2 - wobble * cell * .7;
           context.fillStyle = color?.hex ?? "#ffffff";
           context.beginPath();
-          context.arc(x * cell + cell / 2, y * cell + cell / 2, cell * 0.41, 0, Math.PI * 2);
+          context.ellipse(centerX, centerY, cell * (.4 + wobble * .2), cell * (.4 - wobble * .16), wobble * 2, 0, Math.PI * 2);
           context.fill();
-          context.fillStyle = "rgba(255,255,255,.25)";
+          context.strokeStyle = "rgba(38,35,29,.72)";
+          context.lineWidth = Math.max(.65, cell * .035);
+          context.stroke();
+          context.fillStyle = "rgba(255,255,255,.32)";
           context.beginPath();
-          context.arc(x * cell + cell * 0.38, y * cell + cell * 0.35, cell * 0.1, 0, Math.PI * 2);
+          context.ellipse(centerX - cell * .12, centerY - cell * .13, cell * .09, cell * .055, -.55, 0, Math.PI * 2);
           context.fill();
           if (showCodes && cell >= 18) {
             context.fillStyle = code === "A16" ? "#fff" : "#302d29";
-            context.font = `600 ${Math.max(7, cell * 0.28)}px sans-serif`;
+            context.font = `700 ${Math.max(7, cell * 0.28)}px "Kaiti SC", "KaiTi", serif`;
             context.textAlign = "center";
             context.textBaseline = "middle";
-            context.fillText(code.slice(1), x * cell + cell / 2, y * cell + cell / 2 + 0.5);
+            context.fillText(code.slice(1), centerX, centerY + 0.5);
           }
-        }
-        if (showGrid) {
-          context.strokeStyle = "rgba(72,61,48,.13)";
-          context.lineWidth = 1;
-          context.strokeRect(x * cell, y * cell, cell, cell);
         }
         if (selectedCells.has(y * width + x)) {
           const inset = Math.max(1.5, cell * .08);
@@ -330,6 +331,24 @@ export function BeadStudio() {
           context.strokeRect(x * cell + inset, y * cell + inset, cell - inset * 2, cell - inset * 2);
           context.setLineDash([]);
         }
+      }
+    }
+    if (showGrid) {
+      context.strokeStyle = "rgba(55,50,40,.19)";
+      context.lineWidth = Math.max(.55, activeZoom * .55);
+      for (let x = 0; x <= width; x += 1) {
+        const drift = ((x * 13) % 5 - 2) * .16 * activeZoom;
+        context.beginPath();
+        context.moveTo(x * cell + drift, 0);
+        context.lineTo(x * cell - drift, canvasDisplayHeight);
+        context.stroke();
+      }
+      for (let y = 0; y <= height; y += 1) {
+        const drift = ((y * 11) % 5 - 2) * .16 * activeZoom;
+        context.beginPath();
+        context.moveTo(0, y * cell - drift);
+        context.lineTo(canvasDisplayWidth, y * cell + drift);
+        context.stroke();
       }
     }
   }, [grid, width, height, colorMap, showCodes, showGrid, selectedCells, canvasCellSize, activeZoom, canvasDisplayWidth, canvasDisplayHeight]);

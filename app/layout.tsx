@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     title,
     description,
     type: "website",
-    images: [{ url: `${siteUrl}/og.png`, width: 1730, height: 909, alt: "豆格图片转拼豆图纸工具" }],
+    images: [{ url: `${siteUrl}/og.png`, width: 1731, height: 909, alt: "豆格钢笔手绘风图片转拼豆图纸工具" }],
   },
   twitter: {
     card: "summary_large_image",
