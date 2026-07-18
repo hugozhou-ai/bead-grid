@@ -63,6 +63,8 @@ test("uses the hand-inked visual system across the page and canvas", async () =>
   assert.match(styles, /"LXGW WenKai"/);
   assert.match(styles, /repeating-linear-gradient/);
   assert.match(styles, /border-radius: 46% 54% 49% 51%/);
+  assert.match(styles, /scrollbar-width: none/);
+  assert.match(styles, /\*::\-webkit-scrollbar \{ width: 0; height: 0; display: none; \}/);
   assert.match(source, /context\.ellipse\(centerX, centerY/);
   assert.match(source, /const wobble =/);
   assert.match(source, /document\.fonts\.load\('700 16px "LXGW WenKai"'/);

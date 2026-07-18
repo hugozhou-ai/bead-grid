@@ -26,6 +26,7 @@
 
 ### Fixes
 
+- Hide scrollbars throughout the page while preserving touch, wheel, trackpad, and keyboard scrolling.
 - Reduce the aspect-ratio lock control to a lightweight icon-only action with an accessible label.
 - Fit the entire canvas into the available desktop or mobile workspace by default.
 - Keep every edge of a manually zoomed canvas reachable inside the scroll area.
