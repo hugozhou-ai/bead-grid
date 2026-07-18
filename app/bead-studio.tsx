@@ -47,6 +47,7 @@ type StoredProject = {
   width: number;
   height: number;
   colorLimit: number;
+  autoRemoveBackground: boolean;
   palette: string;
   cells: Array<string | null>;
   savedAt: string;
@@ -179,6 +180,7 @@ function parseStoredProject(value: unknown): StoredProject {
     width,
     height,
     colorLimit: Math.max(3, Math.min(PALETTE.length, Math.round(Number(candidate.colorLimit) || 10))),
+    autoRemoveBackground: candidate.autoRemoveBackground === true,
     palette: PALETTE_NAME,
     cells: candidate.cells,
     savedAt: typeof candidate.savedAt === "string" ? candidate.savedAt : new Date().toISOString(),
@@ -191,6 +193,7 @@ export function BeadStudio() {
   const [draftWidth, setDraftWidth] = useState(32);
   const [draftHeight, setDraftHeight] = useState(32);
   const [colorLimit, setColorLimit] = useState(10);
+  const [autoRemoveBackground, setAutoRemoveBackground] = useState(false);
   const [lockAspectRatio, setLockAspectRatio] = useState(true);
   const [lockedAspectRatio, setLockedAspectRatio] = useState(1);
   const [grid, setGrid] = useState<Array<string | null>>(() => createDemo(32, 32));
@@ -283,6 +286,7 @@ export function BeadStudio() {
           setDraftHeight(project.height);
           setLockedAspectRatio(project.width / project.height);
           setColorLimit(project.colorLimit);
+          setAutoRemoveBackground(project.autoRemoveBackground);
           setGrid(project.cells);
           setSourceName(project.name);
           setDraftSavedAt(project.savedAt);
@@ -302,7 +306,7 @@ export function BeadStudio() {
     const timer = window.setTimeout(() => {
       try {
         const savedAt = new Date().toISOString();
-        const project: StoredProject = { version: 2, name: sourceName, width, height, colorLimit, palette: PALETTE_NAME, cells: grid, savedAt };
+        const project: StoredProject = { version: 2, name: sourceName, width, height, colorLimit, autoRemoveBackground, palette: PALETTE_NAME, cells: grid, savedAt };
         window.localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(project));
         setDraftSavedAt(savedAt);
       } catch (error) {
@@ -310,7 +314,7 @@ export function BeadStudio() {
       }
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [sourceName, width, height, colorLimit, grid]);
+  }, [sourceName, width, height, colorLimit, autoRemoveBackground, grid]);
 
   useEffect(() => {
     activeZoomRef.current = activeZoom;
@@ -768,11 +772,11 @@ export function BeadStudio() {
     if (sourceUrl) URL.revokeObjectURL(sourceUrl);
     setSourceUrl(url);
     setSourceName(file.name.replace(/\.[^.]+$/, ""));
-    await generateFromImage(url, clampGridSize(draftWidth), clampGridSize(draftHeight), colorLimit);
+    await generateFromImage(url, clampGridSize(draftWidth), clampGridSize(draftHeight), colorLimit, autoRemoveBackground);
     event.target.value = "";
   }
 
-  async function generateFromImage(url: string, targetWidth: number, targetHeight: number, limit: number) {
+  async function generateFromImage(url: string, targetWidth: number, targetHeight: number, limit: number, removeBackground: boolean) {
     setIsGenerating(true);
     try {
       const image = new Image();
@@ -801,7 +805,7 @@ export function BeadStudio() {
       context.drawImage(image, sx, sy, sw, sh, 0, 0, sampleCanvas.width, sampleCanvas.height);
       const pixels = context.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height).data;
       const firstPass = quantizeGridByMode(pixels, targetWidth, targetHeight, IMAGE_SAMPLES_PER_CELL, RGB_PALETTE);
-      const backgroundCode = getDominantColorCode(firstPass);
+      const backgroundCode = removeBackground ? getDominantColorCode(firstPass) : null;
       const frequency = new Map<string, number>();
       for (const code of firstPass) if (code && code !== backgroundCode) frequency.set(code, (frequency.get(code) ?? 0) + 1);
       const allowedCodes = [...frequency.entries()]
@@ -857,7 +861,7 @@ export function BeadStudio() {
     setDraftWidth(safeWidth);
     setDraftHeight(safeHeight);
     if (sourceUrl) {
-      void generateFromImage(sourceUrl, safeWidth, safeHeight, colorLimit);
+      void generateFromImage(sourceUrl, safeWidth, safeHeight, colorLimit, autoRemoveBackground);
       return;
     }
     const resized = resizeGrid(grid, width, height, safeWidth, safeHeight);
@@ -967,7 +971,7 @@ export function BeadStudio() {
 
   function confirmProjectSave() {
     const projectName = saveNameDraft.trim().slice(0, 80) || "未命名拼豆项目";
-    const data = JSON.stringify({ version: 2, name: projectName, width, height, colorLimit, palette: PALETTE_NAME, cells: grid, savedAt: new Date().toISOString() }, null, 2);
+    const data = JSON.stringify({ version: 2, name: projectName, width, height, colorLimit, autoRemoveBackground, palette: PALETTE_NAME, cells: grid, savedAt: new Date().toISOString() }, null, 2);
     setSourceName(projectName);
     setIsSaveDialogOpen(false);
     downloadBlob(new Blob([data], { type: "application/json" }), `${projectName}.json`);
@@ -989,6 +993,7 @@ export function BeadStudio() {
       setDraftHeight(project.height);
       setLockedAspectRatio(project.width / project.height);
       setColorLimit(project.colorLimit);
+      setAutoRemoveBackground(project.autoRemoveBackground);
       setGrid(project.cells);
       setUndoStack([]);
       setRedoStack([]);
@@ -1077,12 +1082,20 @@ export function BeadStudio() {
           </div>
 
           <div className="field-group">
+            <label className="setting-switch" htmlFor="auto-remove-background">
+              <span><strong>自动移除背景</strong><small>将出现最多的色号识别为空白</small></span>
+              <input id="auto-remove-background" type="checkbox" checked={autoRemoveBackground} onChange={(event) => setAutoRemoveBackground(event.target.checked)} />
+              <i aria-hidden="true" />
+            </label>
+          </div>
+
+          <div className="field-group">
             <label>色板</label>
             <div className="palette-card"><Palette aria-hidden="true" /><span><strong>通用综合色板 · {PALETTE.length} 色</strong><small>当前项目固定使用此色板</small></span></div>
             <small>屏幕颜色仅供模拟，实体颜色可能因品牌与批次略有差异</small>
           </div>
 
-          {sourceUrl && <button className="primary-button full icon-label" onClick={() => void generateFromImage(sourceUrl, clampGridSize(draftWidth), clampGridSize(draftHeight), colorLimit)} disabled={isGenerating}><RefreshCw aria-hidden="true" />重新生成图纸</button>}
+          {sourceUrl && <button className="primary-button full icon-label" onClick={() => void generateFromImage(sourceUrl, clampGridSize(draftWidth), clampGridSize(draftHeight), colorLimit, autoRemoveBackground)} disabled={isGenerating}><RefreshCw aria-hidden="true" />重新生成图纸</button>}
         </aside>
 
         <section className="canvas-panel">

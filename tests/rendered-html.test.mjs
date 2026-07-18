@@ -51,6 +51,10 @@ test("provides project persistence and non-destructive resizing", async () => {
   assert.match(source, /max=\{PALETTE\.length\}/);
   assert.match(source, /function openSaveProjectDialog/);
   assert.match(source, /role="dialog"/);
+  assert.match(source, /useState\(false\).*autoRemoveBackground|autoRemoveBackground.*useState\(false\)/s);
+  assert.match(source, /candidate\.autoRemoveBackground === true/);
+  assert.match(source, /id="auto-remove-background"/);
+  assert.match(source, /removeBackground \? getDominantColorCode\(firstPass\) : null/);
   assert.doesNotMatch(source, /else commitGrid\(createDemo/);
   assert.doesNotMatch(source, /project-name-field/);
 });

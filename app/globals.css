@@ -135,6 +135,16 @@ button svg, .icon-label svg { width: 16px; height: 16px; flex: 0 0 auto; stroke-
 .apply-size:disabled { cursor: default; opacity: .62; }
 input[type="range"] { width: 100%; height: 3px; accent-color: var(--red); }
 .range-labels { display: flex; justify-content: space-between; color: var(--muted); font-size: 9px; margin-top: 4px; }
+.setting-switch { align-items: center; gap: 12px; margin: 0 !important; cursor: pointer; }
+.setting-switch > span { min-width: 0; display: flex; flex-direction: column; gap: 3px; color: var(--ink) !important; }
+.setting-switch strong { font-size: 12px; }
+.setting-switch small { font-weight: 400; }
+.setting-switch input { position: absolute; opacity: 0; pointer-events: none; }
+.setting-switch > i { width: 34px; height: 19px; flex: 0 0 auto; border: 1.5px solid var(--line); border-radius: 48% 52% 45% 55%; background: var(--paper-light); position: relative; box-shadow: inset 1px 1px rgba(40,39,34,.08); }
+.setting-switch > i::after { content: ""; position: absolute; width: 11px; height: 11px; left: 3px; top: 2.5px; border: 1px solid var(--line); border-radius: 50%; background: var(--card); transition: transform .16s ease; }
+.setting-switch input:checked + i { background: var(--red); }
+.setting-switch input:checked + i::after { transform: translateX(15px); }
+.setting-switch input:focus-visible + i { outline: 2px dashed var(--red); outline-offset: 3px; }
 .palette-card { border: 1px solid var(--line); background: rgba(255,251,238,.7); border-radius: 5px 9px 4px 7px; padding: 9px 10px; display: flex; align-items: center; gap: 8px; margin-bottom: 7px; transform: rotate(-.3deg); }
 .palette-card svg { width: 16px; height: 16px; color: var(--red); }
 .palette-card span { display: flex; flex-direction: column; gap: 2px; }
