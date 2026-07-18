@@ -94,17 +94,15 @@ button svg, .icon-label svg { width: 16px; height: 16px; flex: 0 0 auto; stroke-
 .field-group { border-top: 1px dashed rgba(40,39,34,.45); padding-top: 18px; margin-top: 18px; }
 .field-group label { display: flex; justify-content: space-between; font-size: 12px; font-weight: 900; margin-bottom: 10px; }
 .field-group label span { color: var(--red); }
-.project-name-field { margin-top: 14px; }
-.project-name-field input, .dimension-row input { border: 1px solid var(--line); background: var(--paper-light); color: var(--ink); border-radius: 4px 7px 3px 6px; box-shadow: inset 1px 1px 0 rgba(40,39,34,.08); }
-.project-name-field input { width: 100%; padding: 9px 10px; font-size: 11px; font-weight: 800; }
-.dimension-row { display: grid; grid-template-columns: 1fr 76px 1fr; gap: 6px; align-items: end; margin-bottom: 9px; }
+.dimension-row input, .save-dialog input { border: 1px solid var(--line); background: var(--paper-light); color: var(--ink); border-radius: 4px 7px 3px 6px; box-shadow: inset 1px 1px 0 rgba(40,39,34,.08); }
+.dimension-row { display: grid; grid-template-columns: 1fr 38px 1fr; gap: 7px; align-items: end; margin-bottom: 9px; }
 .dimension-row > label { display: block; margin: 0; color: var(--muted); font-size: 9px; font-weight: 800; }
 .dimension-row > label span { display: block; margin: 0 0 4px 2px; color: var(--muted); }
 .dimension-row input { width: 100%; padding: 9px 4px; text-align: center; font-weight: 900; }
-.ratio-lock { min-height: 51px; border: 1px solid var(--line); background: var(--paper-light); color: var(--muted); border-radius: 6px 9px 5px 8px; padding: 5px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
-.ratio-lock svg { width: 14px; height: 14px; }
-.ratio-lock span { max-width: 66px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 8px; font-weight: 900; }
-.ratio-lock.active { color: var(--red-dark); background: #f3dfd2; box-shadow: inset 0 -2px rgba(185,75,55,.18); }
+.ratio-lock { width: 34px; height: 34px; margin: 0 auto 2px; border: 0; background: transparent; color: var(--muted); border-radius: 50%; padding: 0; cursor: pointer; display: grid; place-items: center; transition: color .14s ease, background .14s ease, transform .14s ease; }
+.ratio-lock:hover { color: var(--ink); background: rgba(40,39,34,.07); transform: rotate(-4deg); }
+.ratio-lock svg { width: 18px; height: 18px; }
+.ratio-lock.active { color: var(--red-dark); background: rgba(185,75,55,.09); }
 .size-presets { display: grid; grid-template-columns: repeat(4,1fr); gap: 5px; }
 .size-presets button { border: 1px solid var(--line); border-radius: 4px 6px 3px 5px; padding: 6px 2px; background: var(--paper-light); color: var(--muted); cursor: pointer; font-size: 9px; font-weight: 900; }
 .size-presets button:nth-child(even) { transform: rotate(.7deg); }
@@ -194,6 +192,19 @@ input[type="range"] { width: 100%; height: 3px; accent-color: var(--red); }
 .material-footnote svg { width: 14px; height: 14px; flex: 0 0 auto; color: var(--red); }
 .material-footnote p { color: var(--muted); font-size: 9px; line-height: 1.5; margin: 0; }
 
+.dialog-backdrop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 20px; background: rgba(40,39,34,.42); backdrop-filter: blur(2px); }
+.save-dialog { width: min(420px, 100%); padding: 24px; color: var(--ink); background: var(--card); border: 2px solid var(--line); border-radius: 8px 13px 7px 11px; box-shadow: 7px 8px 0 rgba(40,39,34,.23); transform: rotate(-.15deg); }
+.save-dialog-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+.save-dialog-heading > div { display: flex; align-items: center; gap: 10px; }
+.save-dialog-heading span { width: 34px; height: 34px; display: grid; place-items: center; color: var(--paper-light); background: var(--red); border: 1.5px solid var(--line); border-radius: 48% 52% 45% 55%; box-shadow: 2px 2px 0 var(--ink); }
+.save-dialog-heading span svg { width: 17px; height: 17px; }
+.save-dialog-heading h2 { margin: 0; font-size: 20px; }
+.save-dialog-heading > button { border: 0; padding: 7px; display: grid; place-items: center; background: transparent; cursor: pointer; }
+.save-dialog label { display: block; margin-bottom: 7px; font-size: 12px; font-weight: 700; }
+.save-dialog input { width: 100%; padding: 11px 12px; font-size: 15px; }
+.save-dialog p { margin: 8px 0 20px; color: var(--muted); font: 10px/1.5 var(--ui-font); }
+.save-dialog-actions { display: flex; justify-content: flex-end; gap: 9px; }
+
 .brand small,
 .privacy-note,
 .save-status,
@@ -203,7 +214,6 @@ input[type="range"] { width: 100%; height: 3px; accent-color: var(--red); }
 .field-group small,
 .project-actions button,
 .dimension-row > label,
-.ratio-lock span,
 .size-presets button,
 .size-summary,
 .range-labels,

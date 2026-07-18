@@ -24,7 +24,8 @@ test("server-renders the Bead Grid application", async () => {
   assert.match(html, /生成设置/);
   assert.match(html, /材料清单/);
   assert.match(html, /图片仅在本机处理/);
-  assert.match(html, /比例已锁定 32:32/);
+  assert.match(html, /aria-label="关闭比例锁定"/);
+  assert.doesNotMatch(html, /比例已锁定 32:32/);
   assert.match(html, /5 mm 拼豆/);
   assert.match(html, /打开项目/);
   assert.match(html, /导出材料 CSV/);
@@ -35,6 +36,7 @@ test("server-renders the Bead Grid application", async () => {
   assert.match(html, />适应<\/button>/);
   assert.doesNotMatch(html, /transform:\s*scale/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Starter Project/);
+  assert.doesNotMatch(html, /id="project-name"/);
 });
 
 test("provides project persistence and non-destructive resizing", async () => {
@@ -44,7 +46,13 @@ test("provides project persistence and non-destructive resizing", async () => {
   assert.match(source, /window\.localStorage\.setItem/);
   assert.match(source, /function importProject/);
   assert.match(source, /function resizeGrid/);
+  assert.match(source, /MAX_GRID_SIZE = 160/);
+  assert.match(source, /max=\{MAX_GRID_SIZE\}/);
+  assert.match(source, /max=\{PALETTE\.length\}/);
+  assert.match(source, /function openSaveProjectDialog/);
+  assert.match(source, /role="dialog"/);
   assert.doesNotMatch(source, /else commitGrid\(createDemo/);
+  assert.doesNotMatch(source, /project-name-field/);
 });
 
 test("uses the hand-inked visual system across the page and canvas", async () => {
@@ -60,6 +68,9 @@ test("uses the hand-inked visual system across the page and canvas", async () =>
   assert.match(source, /document\.fonts\.load\('700 16px "LXGW WenKai"'/);
   assert.match(source, /\[BEAD_FONT\]/);
   assert.match(source, /context\.font = `700 .*"LXGW WenKai"/);
+  assert.match(source, /getExportCellSize\(width, height\)/);
+  assert.match(source, /quantizeGridByMode\(pixels, targetWidth, targetHeight/);
+  assert.match(source, /function beadLabelColor/);
 });
 
 test("keeps browser zoom interception scoped to the canvas workspace", async () => {

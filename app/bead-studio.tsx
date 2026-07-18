@@ -31,6 +31,7 @@ import {
   X,
 } from "lucide-react";
 import { addSelectionLine, getRectangleSelection } from "./selection";
+import { getExportCellSize, quantizeGridByMode } from "./image-processing";
 
 type BeadColor = {
   code: string;
@@ -46,7 +47,7 @@ type StoredProject = {
   width: number;
   height: number;
   colorLimit: number;
-  palette: "通用暖色 16 色";
+  palette: string;
   cells: Array<string | null>;
   savedAt: string;
 };
@@ -85,13 +86,31 @@ const PALETTE: BeadColor[] = [
   { code: "A14", name: "可可棕", hex: "#754C3B" },
   { code: "A15", name: "暖灰", hex: "#9A9188" },
   { code: "A16", name: "炭黑", hex: "#292827" },
+  { code: "A17", name: "纯白", hex: "#FFFFFF" },
+  { code: "A18", name: "浅米黄", hex: "#F3DFB3" },
+  { code: "A19", name: "金黄", hex: "#E9B934" },
+  { code: "A20", name: "亮橙", hex: "#E97532" },
+  { code: "A21", name: "正红", hex: "#D8433E" },
+  { code: "A22", name: "酒红", hex: "#8E3341" },
+  { code: "A23", name: "玫红", hex: "#C9366D" },
+  { code: "A24", name: "浅紫", hex: "#C3A6D6" },
+  { code: "A25", name: "深紫", hex: "#5E417E" },
+  { code: "A26", name: "天蓝", hex: "#A8D5E5" },
+  { code: "A27", name: "宝蓝", hex: "#3676B8" },
+  { code: "A28", name: "藏青", hex: "#304765" },
+  { code: "A29", name: "青绿", hex: "#248B83" },
+  { code: "A30", name: "嫩绿", hex: "#A7D56E" },
+  { code: "A31", name: "墨绿", hex: "#315B43" },
+  { code: "A32", name: "冷灰", hex: "#667078" },
 ];
 
 const RGB_PALETTE = PALETTE.map((color) => ({ ...color, rgb: hexToRgb(color.hex) }));
 const PROJECT_STORAGE_KEY = "bead-grid.project.v2";
+const PALETTE_NAME = "通用综合色板 32 色";
 const MIN_GRID_SIZE = 8;
-const MAX_GRID_SIZE = 80;
-const SIZE_PRESETS = [16, 24, 32, 48];
+const MAX_GRID_SIZE = 160;
+const SIZE_PRESETS = [16, 32, 64, 128];
+const IMAGE_SAMPLES_PER_CELL = 4;
 
 function hexToRgb(hex: string): [number, number, number] {
   return [
@@ -101,18 +120,10 @@ function hexToRgb(hex: string): [number, number, number] {
   ];
 }
 
-function nearestColor(r: number, g: number, b: number, palette = RGB_PALETTE) {
-  let best = palette[0];
-  let bestDistance = Number.POSITIVE_INFINITY;
-  for (const candidate of palette) {
-    const [cr, cg, cb] = candidate.rgb;
-    const distance = 0.3 * (r - cr) ** 2 + 0.59 * (g - cg) ** 2 + 0.11 * (b - cb) ** 2;
-    if (distance < bestDistance) {
-      best = candidate;
-      bestDistance = distance;
-    }
-  }
-  return best.code;
+function beadLabelColor(color?: BeadColor) {
+  if (!color) return "#302d29";
+  const [r, g, b] = hexToRgb(color.hex);
+  return 0.299 * r + 0.587 * g + 0.114 * b < 128 ? "#fff" : "#302d29";
 }
 
 function createDemo(width: number, height: number): Array<string | null> {
@@ -157,7 +168,7 @@ function parseStoredProject(value: unknown): StoredProject {
   const candidate = value as Partial<StoredProject>;
   const width = clampGridSize(Number(candidate.width));
   const height = clampGridSize(Number(candidate.height));
-  if (candidate.width !== width || candidate.height !== height) throw new Error("图纸尺寸超出 8–80 范围");
+  if (candidate.width !== width || candidate.height !== height) throw new Error(`图纸尺寸超出 ${MIN_GRID_SIZE}–${MAX_GRID_SIZE} 范围`);
   if (!Array.isArray(candidate.cells) || candidate.cells.length !== width * height) throw new Error("图纸格子数量与尺寸不一致");
   const validCodes = new Set(PALETTE.map((color) => color.code));
   if (candidate.cells.some((cell) => cell !== null && (typeof cell !== "string" || !validCodes.has(cell)))) throw new Error("图纸包含未知色号");
@@ -166,8 +177,8 @@ function parseStoredProject(value: unknown): StoredProject {
     name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim().slice(0, 80) : "未命名拼豆项目",
     width,
     height,
-    colorLimit: Math.max(3, Math.min(16, Math.round(Number(candidate.colorLimit) || 10))),
-    palette: "通用暖色 16 色",
+    colorLimit: Math.max(3, Math.min(PALETTE.length, Math.round(Number(candidate.colorLimit) || 10))),
+    palette: PALETTE_NAME,
     cells: candidate.cells,
     savedAt: typeof candidate.savedAt === "string" ? candidate.savedAt : new Date().toISOString(),
   };
@@ -198,6 +209,8 @@ export function BeadStudio() {
   const [redoStack, setRedoStack] = useState<GridSnapshot[]>([]);
   const [selectedCells, setSelectedCells] = useState<Set<number>>(() => new Set());
   const [canvasFontReady, setCanvasFontReady] = useState(false);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [saveNameDraft, setSaveNameDraft] = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasScrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -286,7 +299,7 @@ export function BeadStudio() {
     const timer = window.setTimeout(() => {
       try {
         const savedAt = new Date().toISOString();
-        const project: StoredProject = { version: 2, name: sourceName, width, height, colorLimit, palette: "通用暖色 16 色", cells: grid, savedAt };
+        const project: StoredProject = { version: 2, name: sourceName, width, height, colorLimit, palette: PALETTE_NAME, cells: grid, savedAt };
         window.localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(project));
         setDraftSavedAt(savedAt);
       } catch (error) {
@@ -332,7 +345,7 @@ export function BeadStudio() {
           context.ellipse(centerX - cell * .12, centerY - cell * .13, cell * .09, cell * .055, -.55, 0, Math.PI * 2);
           context.fill();
           if (showCodes && cell >= 18) {
-            context.fillStyle = code === "A16" ? "#fff" : "#302d29";
+            context.fillStyle = beadLabelColor(color);
             context.font = `700 ${Math.max(7, cell * 0.28)}px "LXGW WenKai", "Kaiti SC", "KaiTi", serif`;
             context.textAlign = "center";
             context.textBaseline = "middle";
@@ -763,8 +776,8 @@ export function BeadStudio() {
       image.src = url;
       await image.decode();
       const sampleCanvas = document.createElement("canvas");
-      sampleCanvas.width = targetWidth;
-      sampleCanvas.height = targetHeight;
+      sampleCanvas.width = targetWidth * IMAGE_SAMPLES_PER_CELL;
+      sampleCanvas.height = targetHeight * IMAGE_SAMPLES_PER_CELL;
       const context = sampleCanvas.getContext("2d", { willReadFrequently: true });
       if (!context) throw new Error("Canvas context unavailable");
       const sourceRatio = image.width / image.height;
@@ -782,29 +795,19 @@ export function BeadStudio() {
       }
       context.imageSmoothingEnabled = true;
       context.imageSmoothingQuality = "high";
-      context.drawImage(image, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight);
-      const pixels = context.getImageData(0, 0, targetWidth, targetHeight).data;
-      const firstPass: Array<string | null> = [];
+      context.drawImage(image, sx, sy, sw, sh, 0, 0, sampleCanvas.width, sampleCanvas.height);
+      const pixels = context.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height).data;
+      const firstPass = quantizeGridByMode(pixels, targetWidth, targetHeight, IMAGE_SAMPLES_PER_CELL, RGB_PALETTE);
       const frequency = new Map<string, number>();
-      for (let index = 0; index < pixels.length; index += 4) {
-        if (pixels[index + 3] < 70) {
-          firstPass.push(null);
-          continue;
-        }
-        const code = nearestColor(pixels[index], pixels[index + 1], pixels[index + 2]);
-        firstPass.push(code);
-        frequency.set(code, (frequency.get(code) ?? 0) + 1);
-      }
+      for (const code of firstPass) if (code) frequency.set(code, (frequency.get(code) ?? 0) + 1);
       const allowedCodes = [...frequency.entries()]
         .sort((a, b) => b[1] - a[1])
         .slice(0, limit)
         .map(([code]) => code);
       const allowed = RGB_PALETTE.filter((color) => allowedCodes.includes(color.code));
-      const next = firstPass.map((code, index) => {
-        if (!code || allowedCodes.includes(code)) return code;
-        const pixelIndex = index * 4;
-        return nearestColor(pixels[pixelIndex], pixels[pixelIndex + 1], pixels[pixelIndex + 2], allowed);
-      });
+      const next = allowedCodes.length >= frequency.size
+        ? firstPass
+        : quantizeGridByMode(pixels, targetWidth, targetHeight, IMAGE_SAMPLES_PER_CELL, allowed);
       commitGrid(next, `已生成 ${targetWidth} × ${targetHeight} 图纸`, false, targetWidth, targetHeight);
     } catch (error) {
       console.error("[BEAD_GENERATE]", JSON.stringify({ message: error instanceof Error ? error.message : String(error) }));
@@ -855,11 +858,16 @@ export function BeadStudio() {
     commitGrid(resized, `已调整为 ${safeWidth} × ${safeHeight}，原图案已保留`, false, safeWidth, safeHeight);
   }
 
-  function exportPng() {
-    const source = canvasRef.current;
-    if (!source) return;
+  async function exportPng() {
+    try {
+      await document.fonts.load('700 16px "LXGW WenKai"', "A0123456789");
+    } catch (error) {
+      console.error("[BEAD_EXPORT]", JSON.stringify({ action: "load-font", message: error instanceof Error ? error.message : String(error) }));
+      setToast("导出字体加载失败，请检查网络后重试");
+      return;
+    }
     const output = document.createElement("canvas");
-    const cell = 32;
+    const cell = getExportCellSize(width, height);
     output.width = width * cell;
     output.height = height * cell;
     const context = output.getContext("2d");
@@ -872,24 +880,39 @@ export function BeadStudio() {
       context.strokeStyle = "#ddd4c6";
       context.strokeRect(x * cell, y * cell, cell, cell);
       if (!code) return;
-      context.fillStyle = colorMap.get(code)?.hex ?? "#fff";
+      const color = colorMap.get(code);
+      context.fillStyle = color?.hex ?? "#fff";
       context.beginPath();
       context.arc(x * cell + cell / 2, y * cell + cell / 2, cell * 0.4, 0, Math.PI * 2);
       context.fill();
-      context.fillStyle = code === "A16" ? "#fff" : "#332f2a";
-      context.font = "600 9px sans-serif";
+      context.fillStyle = beadLabelColor(color);
+      context.font = `700 ${Math.max(9, cell * .29)}px "LXGW WenKai", sans-serif`;
       context.textAlign = "center";
       context.textBaseline = "middle";
       context.fillText(code, x * cell + cell / 2, y * cell + cell / 2);
     });
     output.toBlob((blob) => {
-      if (blob) downloadBlob(blob, `${sourceName || "拼豆图纸"}-${width}x${height}.png`);
+      if (!blob) {
+        console.error("[BEAD_EXPORT]", JSON.stringify({ action: "png", width: output.width, height: output.height, message: "Canvas returned an empty blob" }));
+        setToast("图纸导出失败，请稍后重试");
+        return;
+      }
+      downloadBlob(blob, `${sourceName || "拼豆图纸"}-${width}x${height}.png`);
+      setToast(`已导出 ${output.width} × ${output.height} 高清 PNG`);
     }, "image/png");
   }
 
-  function exportProject() {
-    const data = JSON.stringify({ version: 2, name: sourceName, width, height, colorLimit, palette: "通用暖色 16 色", cells: grid, savedAt: new Date().toISOString() }, null, 2);
-    downloadBlob(new Blob([data], { type: "application/json" }), `${sourceName || "拼豆项目"}.json`);
+  function openSaveProjectDialog() {
+    setSaveNameDraft(sourceName || "未命名拼豆项目");
+    setIsSaveDialogOpen(true);
+  }
+
+  function confirmProjectSave() {
+    const projectName = saveNameDraft.trim().slice(0, 80) || "未命名拼豆项目";
+    const data = JSON.stringify({ version: 2, name: projectName, width, height, colorLimit, palette: PALETTE_NAME, cells: grid, savedAt: new Date().toISOString() }, null, 2);
+    setSourceName(projectName);
+    setIsSaveDialogOpen(false);
+    downloadBlob(new Blob([data], { type: "application/json" }), `${projectName}.json`);
     setToast("项目源文件已保存");
   }
 
@@ -942,8 +965,8 @@ export function BeadStudio() {
         <div className="header-actions">
           <span className="privacy-note"><ShieldCheck aria-hidden="true" /> 图片仅在本机处理</span>
           <span className="save-status" title={draftSavedAt ? `最近保存：${new Date(draftSavedAt).toLocaleString("zh-CN")}` : "正在准备自动保存"}><Clock3 aria-hidden="true" />{draftSavedAt ? "已自动保存" : "自动保存"}</span>
-          <button className="quiet-button icon-label" onClick={exportProject}><FileJson aria-hidden="true" />保存项目</button>
-          <button className="primary-button compact icon-label" onClick={exportPng}><Download aria-hidden="true" />导出图纸</button>
+          <button className="quiet-button icon-label" onClick={openSaveProjectDialog}><FileJson aria-hidden="true" />保存项目</button>
+          <button className="primary-button compact icon-label" onClick={() => void exportPng()}><Download aria-hidden="true" />导出图纸</button>
         </div>
       </header>
 
@@ -971,38 +994,33 @@ export function BeadStudio() {
           </button>
           <div className="project-actions">
             <button className="icon-label" onClick={() => projectInputRef.current?.click()}><FolderOpen aria-hidden="true" />打开项目</button>
-            <button className="icon-label" onClick={exportProject}><FileDown aria-hidden="true" />保存源文件</button>
-          </div>
-
-          <div className="field-group project-name-field">
-            <label htmlFor="project-name">项目名称</label>
-            <input id="project-name" value={sourceName} maxLength={80} onChange={(event) => setSourceName(event.target.value)} />
+            <button className="icon-label" onClick={openSaveProjectDialog}><FileDown aria-hidden="true" />保存源文件</button>
           </div>
 
           <div className="field-group">
             <label>网格尺寸 <span>{draftWidth} × {draftHeight}</span></label>
             <div className="dimension-row">
-              <label><span>宽</span><input aria-label="横向豆子数量" type="number" min="8" max="80" value={draftWidth} onChange={(e) => handleWidthChange(Number(e.target.value))} /></label>
-              <button className={`ratio-lock ${lockAspectRatio ? "active" : ""}`} aria-pressed={lockAspectRatio} onClick={toggleLockAspectRatio}>{lockAspectRatio ? <Link2 aria-hidden="true" /> : <Link2Off aria-hidden="true" />}<span>{lockAspectRatio ? `比例已锁定 ${draftWidth}:${draftHeight}` : "自由尺寸"}</span></button>
-              <label><span>高</span><input aria-label="纵向豆子数量" type="number" min="8" max="80" value={draftHeight} onChange={(e) => handleHeightChange(Number(e.target.value))} /></label>
+              <label><span>宽</span><input aria-label="横向豆子数量" type="number" min={MIN_GRID_SIZE} max={MAX_GRID_SIZE} value={draftWidth} onChange={(e) => handleWidthChange(Number(e.target.value))} /></label>
+              <button className={`ratio-lock ${lockAspectRatio ? "active" : ""}`} aria-label={lockAspectRatio ? "关闭比例锁定" : "开启比例锁定"} title={lockAspectRatio ? "比例已锁定，点击解除" : "点击锁定宽高比例"} aria-pressed={lockAspectRatio} onClick={toggleLockAspectRatio}>{lockAspectRatio ? <Link2 aria-hidden="true" /> : <Link2Off aria-hidden="true" />}</button>
+              <label><span>高</span><input aria-label="纵向豆子数量" type="number" min={MIN_GRID_SIZE} max={MAX_GRID_SIZE} value={draftHeight} onChange={(e) => handleHeightChange(Number(e.target.value))} /></label>
             </div>
             <div className="size-presets" aria-label="常用网格尺寸">
               {SIZE_PRESETS.map((size) => <button key={size} className={draftWidth === size && draftHeight === size ? "active" : ""} onClick={() => applyPreset(size)}>{size}²</button>)}
             </div>
             <p className="size-summary">约 {physicalWidth} × {physicalHeight} cm · 5 mm 拼豆</p>
             <button className={`apply-size icon-label${pendingSizeChanged ? " pending" : ""}`} onClick={applySize} disabled={!pendingSizeChanged}><Check aria-hidden="true" />{pendingSizeChanged ? "应用新尺寸" : "尺寸已应用"}</button>
-            <small>支持 8–80 格；开启比例锁定后，修改一边会同步另一边</small>
+            <small>支持 {MIN_GRID_SIZE}–{MAX_GRID_SIZE} 格；锁定比例后，修改一边会同步另一边</small>
           </div>
 
           <div className="field-group">
             <label htmlFor="color-limit">颜色数量 <span>{colorLimit} 色</span></label>
-            <input id="color-limit" type="range" min="3" max="16" value={colorLimit} onChange={(e) => setColorLimit(Number(e.target.value))} />
+            <input id="color-limit" type="range" min="3" max={PALETTE.length} value={colorLimit} onChange={(e) => setColorLimit(Number(e.target.value))} />
             <div className="range-labels"><span>简洁</span><span>细腻</span></div>
           </div>
 
           <div className="field-group">
             <label>色板</label>
-            <div className="palette-card"><Palette aria-hidden="true" /><span><strong>通用暖色 · 16 色</strong><small>当前项目固定使用此色板</small></span></div>
+            <div className="palette-card"><Palette aria-hidden="true" /><span><strong>通用综合色板 · {PALETTE.length} 色</strong><small>当前项目固定使用此色板</small></span></div>
             <small>屏幕颜色仅供模拟，实体颜色可能因品牌与批次略有差异</small>
           </div>
 
@@ -1106,7 +1124,7 @@ export function BeadStudio() {
           </div>
           <div className="material-footnote"><Info aria-hidden="true" /><p>建议按清单多准备约 10% 的豆子，避免制作中途缺色。</p></div>
           <button className="quiet-button full icon-label" onClick={exportMaterialsCsv}><FileSpreadsheet aria-hidden="true" />导出材料 CSV</button>
-          <button className="primary-button full icon-label" onClick={exportPng}><Download aria-hidden="true" />导出带色号 PNG</button>
+          <button className="primary-button full icon-label" onClick={() => void exportPng()}><Download aria-hidden="true" />导出带色号 PNG</button>
         </aside>
       </section>
 
@@ -1114,6 +1132,24 @@ export function BeadStudio() {
         <p><strong>豆格 BEAD GRID</strong> · 一张图，一盘豆，一点耐心。</p>
         <p>本地处理 · 无需登录 · 支持手机与电脑</p>
       </footer>
+
+      {isSaveDialogOpen && (
+        <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsSaveDialogOpen(false); }}>
+          <form className="save-dialog" role="dialog" aria-modal="true" aria-labelledby="save-dialog-title" onSubmit={(event) => { event.preventDefault(); confirmProjectSave(); }} onKeyDown={(event) => { if (event.key === "Escape") setIsSaveDialogOpen(false); }}>
+            <div className="save-dialog-heading">
+              <div><span><FileJson aria-hidden="true" /></span><h2 id="save-dialog-title">保存项目</h2></div>
+              <button type="button" aria-label="关闭保存窗口" title="关闭" onClick={() => setIsSaveDialogOpen(false)}><X aria-hidden="true" /></button>
+            </div>
+            <label htmlFor="save-project-name">项目名称</label>
+            <input id="save-project-name" autoFocus value={saveNameDraft} maxLength={80} onChange={(event) => setSaveNameDraft(event.target.value)} />
+            <p>项目将保存为可继续编辑的 JSON 源文件。</p>
+            <div className="save-dialog-actions">
+              <button type="button" className="quiet-button" onClick={() => setIsSaveDialogOpen(false)}>取消</button>
+              <button type="submit" className="primary-button icon-label"><FileDown aria-hidden="true" />保存源文件</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {toast && <div className="toast" role="status">{toast}</div>}
     </main>

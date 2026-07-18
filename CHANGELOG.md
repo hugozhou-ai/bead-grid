@@ -9,6 +9,10 @@
 
 ### Features
 
+- Raise the grid limit to 160×160 and expand the general palette and color limit from 16 to 32 colors.
+- Sample multiple source pixels per bead and choose the modal palette code instead of averaging each region during image downscaling.
+- Size PNG exports dynamically from the grid dimensions so dense patterns retain sharp grids and color codes.
+- Ask for the project name only when saving and keep it out of the regular settings panel.
 - Use self-hosted LXGW WenKai for headings, body copy, and Canvas color codes; keep tiny supporting text in the system UI font for legibility.
 - Redesign the complete interface with warm sketchbook paper, fountain-pen linework, irregular hand-drawn controls, and a matching social preview card.
 - Render beads and grid lines with deterministic hand-inked variations while preserving color-code readability at every zoom level.
@@ -22,6 +26,7 @@
 
 ### Fixes
 
+- Reduce the aspect-ratio lock control to a lightweight icon-only action with an accessible label.
 - Fit the entire canvas into the available desktop or mobile workspace by default.
 - Keep every edge of a manually zoomed canvas reachable inside the scroll area.
 - Center fit-mode canvases against the mobile viewport instead of their intrinsic content width.
