@@ -14,7 +14,8 @@
 - Size PNG exports dynamically from the grid dimensions so dense patterns retain sharp grids and color codes.
 - Ask for the project name only when saving and keep it out of the regular settings panel.
 - Treat the most frequent generated palette code as the default blank background.
-- Draw fine bead cells plus stronger 29×29 standard pegboard boundaries in exported PNG patterns.
+- Ask for a 52×52, 78×78, 104×104, or 120×120 pegboard size before PNG export, defaulting to 52×52, while retaining fine bead cells.
+- Add one-based column numbers to the top and bottom and row numbers to the left and right of exported patterns.
 - Use self-hosted LXGW WenKai for headings, body copy, and Canvas color codes; keep tiny supporting text in the system UI font for legibility.
 - Redesign the complete interface with warm sketchbook paper, fountain-pen linework, irregular hand-drawn controls, and a matching social preview card.
 - Render beads and grid lines with deterministic hand-inked variations while preserving color-code readability at every zoom level.

@@ -111,7 +111,7 @@ const MIN_GRID_SIZE = 8;
 const MAX_GRID_SIZE = 160;
 const SIZE_PRESETS = [16, 32, 64, 128];
 const IMAGE_SAMPLES_PER_CELL = 4;
-const PEGBOARD_GRID_SIZE = 29;
+const PEGBOARD_SIZE_OPTIONS = [52, 78, 104, 120] as const;
 
 function hexToRgb(hex: string): [number, number, number] {
   return [
@@ -212,6 +212,8 @@ export function BeadStudio() {
   const [canvasFontReady, setCanvasFontReady] = useState(false);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [saveNameDraft, setSaveNameDraft] = useState("");
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [exportBoardSize, setExportBoardSize] = useState<number>(PEGBOARD_SIZE_OPTIONS[0]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasScrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -862,7 +864,7 @@ export function BeadStudio() {
     commitGrid(resized, `已调整为 ${safeWidth} × ${safeHeight}，原图案已保留`, false, safeWidth, safeHeight);
   }
 
-  async function exportPng() {
+  async function exportPng(pegboardSize: number) {
     try {
       await document.fonts.load('700 16px "LXGW WenKai"', "A0123456789");
     } catch (error) {
@@ -872,12 +874,17 @@ export function BeadStudio() {
     }
     const output = document.createElement("canvas");
     const cell = getExportCellSize(width, height);
-    output.width = width * cell;
-    output.height = height * cell;
+    const labelGutter = Math.max(24, Math.ceil(cell * .85));
+    const gridPixelWidth = width * cell;
+    const gridPixelHeight = height * cell;
+    output.width = gridPixelWidth + labelGutter * 2;
+    output.height = gridPixelHeight + labelGutter * 2;
     const context = output.getContext("2d");
     if (!context) return;
     context.fillStyle = "#fffdf8";
     context.fillRect(0, 0, output.width, output.height);
+    context.save();
+    context.translate(labelGutter, labelGutter);
     grid.forEach((code, index) => {
       const x = index % width;
       const y = Math.floor(index / width);
@@ -898,30 +905,46 @@ export function BeadStudio() {
     context.beginPath();
     for (let x = 0; x <= width; x += 1) {
       context.moveTo(x * cell, 0);
-      context.lineTo(x * cell, output.height);
+      context.lineTo(x * cell, gridPixelHeight);
     }
     for (let y = 0; y <= height; y += 1) {
       context.moveTo(0, y * cell);
-      context.lineTo(output.width, y * cell);
+      context.lineTo(gridPixelWidth, y * cell);
     }
     context.stroke();
 
     context.lineWidth = Math.max(2.5, cell * .085);
     context.strokeStyle = "#756c60";
     context.beginPath();
-    for (let x = 0; x <= width; x += PEGBOARD_GRID_SIZE) {
+    for (let x = 0; x <= width; x += pegboardSize) {
       context.moveTo(x * cell, 0);
-      context.lineTo(x * cell, output.height);
+      context.lineTo(x * cell, gridPixelHeight);
     }
-    for (let y = 0; y <= height; y += PEGBOARD_GRID_SIZE) {
+    for (let y = 0; y <= height; y += pegboardSize) {
       context.moveTo(0, y * cell);
-      context.lineTo(output.width, y * cell);
+      context.lineTo(gridPixelWidth, y * cell);
     }
-    context.moveTo(output.width, 0);
-    context.lineTo(output.width, output.height);
-    context.moveTo(0, output.height);
-    context.lineTo(output.width, output.height);
+    context.moveTo(gridPixelWidth, 0);
+    context.lineTo(gridPixelWidth, gridPixelHeight);
+    context.moveTo(0, gridPixelHeight);
+    context.lineTo(gridPixelWidth, gridPixelHeight);
     context.stroke();
+    context.restore();
+
+    context.fillStyle = "#514b42";
+    context.font = `700 ${Math.max(9, cell * .26)}px "LXGW WenKai", sans-serif`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    for (let x = 0; x < width; x += 1) {
+      const centerX = labelGutter + x * cell + cell / 2;
+      context.fillText(String(x + 1), centerX, labelGutter / 2);
+      context.fillText(String(x + 1), centerX, labelGutter + gridPixelHeight + labelGutter / 2);
+    }
+    for (let y = 0; y < height; y += 1) {
+      const centerY = labelGutter + y * cell + cell / 2;
+      context.fillText(String(y + 1), labelGutter / 2, centerY);
+      context.fillText(String(y + 1), labelGutter + gridPixelWidth + labelGutter / 2, centerY);
+    }
     output.toBlob((blob) => {
       if (!blob) {
         console.error("[BEAD_EXPORT]", JSON.stringify({ action: "png", width: output.width, height: output.height, message: "Canvas returned an empty blob" }));
@@ -931,6 +954,10 @@ export function BeadStudio() {
       downloadBlob(blob, `${sourceName || "拼豆图纸"}-${width}x${height}.png`);
       setToast(`已导出 ${output.width} × ${output.height} 高清 PNG`);
     }, "image/png");
+  }
+
+  function openExportDialog() {
+    setIsExportDialogOpen(true);
   }
 
   function openSaveProjectDialog() {
@@ -997,7 +1024,7 @@ export function BeadStudio() {
           <span className="privacy-note"><ShieldCheck aria-hidden="true" /> 图片仅在本机处理</span>
           <span className="save-status" title={draftSavedAt ? `最近保存：${new Date(draftSavedAt).toLocaleString("zh-CN")}` : "正在准备自动保存"}><Clock3 aria-hidden="true" />{draftSavedAt ? "已自动保存" : "自动保存"}</span>
           <button className="quiet-button icon-label" onClick={openSaveProjectDialog}><FileJson aria-hidden="true" />保存项目</button>
-          <button className="primary-button compact icon-label" onClick={() => void exportPng()}><Download aria-hidden="true" />导出图纸</button>
+          <button className="primary-button compact icon-label" onClick={openExportDialog}><Download aria-hidden="true" />导出图纸</button>
         </div>
       </header>
 
@@ -1155,7 +1182,7 @@ export function BeadStudio() {
           </div>
           <div className="material-footnote"><Info aria-hidden="true" /><p>建议按清单多准备约 10% 的豆子，避免制作中途缺色。</p></div>
           <button className="quiet-button full icon-label" onClick={exportMaterialsCsv}><FileSpreadsheet aria-hidden="true" />导出材料 CSV</button>
-          <button className="primary-button full icon-label" onClick={() => void exportPng()}><Download aria-hidden="true" />导出带色号 PNG</button>
+          <button className="primary-button full icon-label" onClick={openExportDialog}><Download aria-hidden="true" />导出带色号 PNG</button>
         </aside>
       </section>
 
@@ -1166,17 +1193,38 @@ export function BeadStudio() {
 
       {isSaveDialogOpen && (
         <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsSaveDialogOpen(false); }}>
-          <form className="save-dialog" role="dialog" aria-modal="true" aria-labelledby="save-dialog-title" onSubmit={(event) => { event.preventDefault(); confirmProjectSave(); }} onKeyDown={(event) => { if (event.key === "Escape") setIsSaveDialogOpen(false); }}>
-            <div className="save-dialog-heading">
+          <form className="action-dialog" role="dialog" aria-modal="true" aria-labelledby="save-dialog-title" onSubmit={(event) => { event.preventDefault(); confirmProjectSave(); }} onKeyDown={(event) => { if (event.key === "Escape") setIsSaveDialogOpen(false); }}>
+            <div className="action-dialog-heading">
               <div><span><FileJson aria-hidden="true" /></span><h2 id="save-dialog-title">保存项目</h2></div>
               <button type="button" aria-label="关闭保存窗口" title="关闭" onClick={() => setIsSaveDialogOpen(false)}><X aria-hidden="true" /></button>
             </div>
             <label htmlFor="save-project-name">项目名称</label>
             <input id="save-project-name" autoFocus value={saveNameDraft} maxLength={80} onChange={(event) => setSaveNameDraft(event.target.value)} />
             <p>项目将保存为可继续编辑的 JSON 源文件。</p>
-            <div className="save-dialog-actions">
+            <div className="action-dialog-actions">
               <button type="button" className="quiet-button" onClick={() => setIsSaveDialogOpen(false)}>取消</button>
               <button type="submit" className="primary-button icon-label"><FileDown aria-hidden="true" />保存源文件</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {isExportDialogOpen && (
+        <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsExportDialogOpen(false); }}>
+          <form className="action-dialog" role="dialog" aria-modal="true" aria-labelledby="export-dialog-title" onSubmit={(event) => { event.preventDefault(); setIsExportDialogOpen(false); void exportPng(exportBoardSize); }} onKeyDown={(event) => { if (event.key === "Escape") setIsExportDialogOpen(false); }}>
+            <div className="action-dialog-heading">
+              <div><span><Scan aria-hidden="true" /></span><h2 id="export-dialog-title">拼豆板尺寸</h2></div>
+              <button type="button" aria-label="关闭导出窗口" title="关闭" onClick={() => setIsExportDialogOpen(false)}><X aria-hidden="true" /></button>
+            </div>
+            <p>粗网格线将按所选拼豆板尺寸划分，逐豆细网格会继续保留。</p>
+            <div className="board-size-options" role="group" aria-label="选择拼豆板尺寸">
+              {PEGBOARD_SIZE_OPTIONS.map((size) => (
+                <button type="button" key={size} className={exportBoardSize === size ? "active" : ""} aria-pressed={exportBoardSize === size} onClick={() => setExportBoardSize(size)}>{size} × {size}</button>
+              ))}
+            </div>
+            <div className="action-dialog-actions">
+              <button type="button" className="quiet-button" onClick={() => setIsExportDialogOpen(false)}>取消</button>
+              <button type="submit" className="primary-button icon-label"><Download aria-hidden="true" />导出 PNG</button>
             </div>
           </form>
         </div>

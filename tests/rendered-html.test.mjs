@@ -79,9 +79,15 @@ test("uses the hand-inked visual system across the page and canvas", async () =>
   assert.match(source, /quantizeGridByMode\(pixels, targetWidth, targetHeight/);
   assert.match(source, /getDominantColorCode\(firstPass\)/);
   assert.match(source, /firstPass\[index\] === backgroundCode \? null : code/);
-  assert.match(source, /PEGBOARD_GRID_SIZE = 29/);
-  assert.match(source, /x \+= PEGBOARD_GRID_SIZE/);
-  assert.match(source, /y \+= PEGBOARD_GRID_SIZE/);
+  assert.match(source, /PEGBOARD_SIZE_OPTIONS = \[52, 78, 104, 120\]/);
+  assert.match(source, /useState<number>\(PEGBOARD_SIZE_OPTIONS\[0\]\)/);
+  assert.match(source, /<h2 id="export-dialog-title">拼豆板尺寸<\/h2>/);
+  assert.match(source, /x \+= pegboardSize/);
+  assert.match(source, /y \+= pegboardSize/);
+  assert.match(source, /context\.translate\(labelGutter, labelGutter\)/);
+  assert.match(source, /context\.fillText\(String\(x \+ 1\), centerX, labelGutter \/ 2\)/);
+  assert.match(source, /context\.fillText\(String\(y \+ 1\), labelGutter \/ 2, centerY\)/);
+  assert.doesNotMatch(source, /PEGBOARD_GRID_SIZE|save-dialog-heading|save-dialog-actions/);
   assert.match(source, /function beadLabelColor/);
 });
 
