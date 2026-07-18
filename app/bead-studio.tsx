@@ -197,6 +197,7 @@ export function BeadStudio() {
   const [undoStack, setUndoStack] = useState<GridSnapshot[]>([]);
   const [redoStack, setRedoStack] = useState<GridSnapshot[]>([]);
   const [selectedCells, setSelectedCells] = useState<Set<number>>(() => new Set());
+  const [canvasFontReady, setCanvasFontReady] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasScrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -236,6 +237,23 @@ export function BeadStudio() {
   const pendingSizeChanged = draftWidth !== width || draftHeight !== height;
   const physicalWidth = (draftWidth * .5).toFixed(draftWidth % 2 ? 1 : 0);
   const physicalHeight = (draftHeight * .5).toFixed(draftHeight % 2 ? 1 : 0);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      document.fonts.load('400 16px "LXGW WenKai"', "豆格拼豆图纸"),
+      document.fonts.load('700 16px "LXGW WenKai"', "色号A04"),
+    ])
+      .then(() => {
+        if (active) setCanvasFontReady(true);
+      })
+      .catch((error) => {
+        console.error("[BEAD_FONT]", JSON.stringify({ action: "load", message: error instanceof Error ? error.message : String(error) }));
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -315,7 +333,7 @@ export function BeadStudio() {
           context.fill();
           if (showCodes && cell >= 18) {
             context.fillStyle = code === "A16" ? "#fff" : "#302d29";
-            context.font = `700 ${Math.max(7, cell * 0.28)}px "Kaiti SC", "KaiTi", serif`;
+            context.font = `700 ${Math.max(7, cell * 0.28)}px "LXGW WenKai", "Kaiti SC", "KaiTi", serif`;
             context.textAlign = "center";
             context.textBaseline = "middle";
             context.fillText(code.slice(1), centerX, centerY + 0.5);
@@ -351,7 +369,7 @@ export function BeadStudio() {
         context.stroke();
       }
     }
-  }, [grid, width, height, colorMap, showCodes, showGrid, selectedCells, canvasCellSize, activeZoom, canvasDisplayWidth, canvasDisplayHeight]);
+  }, [grid, width, height, colorMap, showCodes, showGrid, selectedCells, canvasCellSize, activeZoom, canvasDisplayWidth, canvasDisplayHeight, canvasFontReady]);
 
   useEffect(() => {
     const scrollArea = canvasScrollRef.current;

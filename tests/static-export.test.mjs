@@ -10,7 +10,14 @@ test("exports a GitHub Pages-ready static site", async () => {
   assert.match(html, /<html lang="zh-CN">/i);
   assert.match(html, /<title>豆格 Bead Grid｜图片转拼豆图纸<\/title>/i);
   assert.match(html, /(?:src|href)="\/bead-grid\/_next\//);
+  assert.match(html, /href="\/bead-grid\/fonts\/lxgw-wenkai\/regular\.css"/);
+  assert.match(html, /href="\/bead-grid\/fonts\/lxgw-wenkai\/bold\.css"/);
   assert.match(html, /https:\/\/hugozhou-ai\.github\.io\/bead-grid\/og\.png/);
   await access(new URL("og.png", outputRoot));
+  await access(new URL("fonts/lxgw-wenkai/regular.css", outputRoot));
+  await access(new URL("fonts/lxgw-wenkai/bold.css", outputRoot));
+  await access(new URL("fonts/lxgw-wenkai/files/lxgwwenkai-regular-subset-119.woff2", outputRoot));
+  await access(new URL("fonts/lxgw-wenkai/files/lxgwwenkai-bold-subset-119.woff2", outputRoot));
+  await access(new URL("fonts/lxgw-wenkai/OFL.txt", outputRoot));
   await access(new URL(".nojekyll", outputRoot));
 });

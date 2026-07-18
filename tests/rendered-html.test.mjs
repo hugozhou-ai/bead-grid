@@ -30,6 +30,8 @@ test("server-renders the Bead Grid application", async () => {
   assert.match(html, /导出材料 CSV/);
   assert.match(html, /class="canvas-scroll-content fit"/);
   assert.match(html, /class="bead-canvas tool-paint" style="width:720px;height:720px"/);
+  assert.match(html, /href="\/fonts\/lxgw-wenkai\/regular\.css"/);
+  assert.match(html, /href="\/fonts\/lxgw-wenkai\/bold\.css"/);
   assert.match(html, />适应<\/button>/);
   assert.doesNotMatch(html, /transform:\s*scale/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Starter Project/);
@@ -50,10 +52,14 @@ test("uses the hand-inked visual system across the page and canvas", async () =>
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 
   assert.match(styles, /--pen-font:/);
+  assert.match(styles, /"LXGW WenKai"/);
   assert.match(styles, /repeating-linear-gradient/);
   assert.match(styles, /border-radius: 46% 54% 49% 51%/);
   assert.match(source, /context\.ellipse\(centerX, centerY/);
   assert.match(source, /const wobble =/);
+  assert.match(source, /document\.fonts\.load\('700 16px "LXGW WenKai"'/);
+  assert.match(source, /\[BEAD_FONT\]/);
+  assert.match(source, /context\.font = `700 .*"LXGW WenKai"/);
 });
 
 test("keeps browser zoom interception scoped to the canvas workspace", async () => {

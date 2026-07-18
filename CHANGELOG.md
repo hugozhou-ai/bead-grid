@@ -9,6 +9,7 @@
 
 ### Features
 
+- Use self-hosted LXGW WenKai for headings, body copy, and Canvas color codes; keep tiny supporting text in the system UI font for legibility.
 - Redesign the complete interface with warm sketchbook paper, fountain-pen linework, irregular hand-drawn controls, and a matching social preview card.
 - Render beads and grid lines with deterministic hand-inked variations while preserving color-code readability at every zoom level.
 - Add visible aspect-ratio locking, common grid presets, and 5 mm finished-size estimates.
