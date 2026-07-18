@@ -13,6 +13,8 @@
 - Sample multiple source pixels per bead and choose the modal palette code instead of averaging each region during image downscaling.
 - Size PNG exports dynamically from the grid dimensions so dense patterns retain sharp grids and color codes.
 - Ask for the project name only when saving and keep it out of the regular settings panel.
+- Treat the most frequent generated palette code as the default blank background.
+- Draw fine bead cells plus stronger 29×29 standard pegboard boundaries in exported PNG patterns.
 - Use self-hosted LXGW WenKai for headings, body copy, and Canvas color codes; keep tiny supporting text in the system UI font for legibility.
 - Redesign the complete interface with warm sketchbook paper, fountain-pen linework, irregular hand-drawn controls, and a matching social preview card.
 - Render beads and grid lines with deterministic hand-inked variations while preserving color-code readability at every zoom level.

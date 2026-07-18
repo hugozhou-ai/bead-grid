@@ -59,3 +59,17 @@ export function getExportCellSize(width: number, height: number) {
   const longestEdge = Math.max(1, width, height);
   return Math.max(32, Math.min(96, Math.ceil(4096 / longestEdge)));
 }
+
+export function getDominantColorCode(cells: Array<string | null>) {
+  const frequency = new Map<string, number>();
+  for (const code of cells) if (code) frequency.set(code, (frequency.get(code) ?? 0) + 1);
+  let dominantCode: string | null = null;
+  let dominantCount = 0;
+  for (const [code, count] of frequency) {
+    if (count > dominantCount) {
+      dominantCode = code;
+      dominantCount = count;
+    }
+  }
+  return dominantCode;
+}

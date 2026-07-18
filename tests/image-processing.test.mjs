@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getExportCellSize, quantizeGridByMode } from "../app/image-processing.ts";
+import { getDominantColorCode, getExportCellSize, quantizeGridByMode } from "../app/image-processing.ts";
 
 const palette = [
   { code: "RED", rgb: [240, 40, 40] },
@@ -31,4 +31,9 @@ test("scales PNG cell resolution with the grid while keeping large exports bound
   assert.equal(getExportCellSize(16, 16), 96);
   assert.equal(getExportCellSize(80, 80), 52);
   assert.equal(getExportCellSize(200, 160), 32);
+});
+
+test("detects the most frequent non-transparent color as the background", () => {
+  assert.equal(getDominantColorCode([null, "A02", "A01", "A02", null, "A02", "A01"]), "A02");
+  assert.equal(getDominantColorCode([null, null]), null);
 });

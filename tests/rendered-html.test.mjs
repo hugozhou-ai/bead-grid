@@ -77,6 +77,11 @@ test("uses the hand-inked visual system across the page and canvas", async () =>
   assert.match(source, /context\.font = `700 .*"LXGW WenKai"/);
   assert.match(source, /getExportCellSize\(width, height\)/);
   assert.match(source, /quantizeGridByMode\(pixels, targetWidth, targetHeight/);
+  assert.match(source, /getDominantColorCode\(firstPass\)/);
+  assert.match(source, /firstPass\[index\] === backgroundCode \? null : code/);
+  assert.match(source, /PEGBOARD_GRID_SIZE = 29/);
+  assert.match(source, /x \+= PEGBOARD_GRID_SIZE/);
+  assert.match(source, /y \+= PEGBOARD_GRID_SIZE/);
   assert.match(source, /function beadLabelColor/);
 });
 

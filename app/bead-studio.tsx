@@ -31,7 +31,7 @@ import {
   X,
 } from "lucide-react";
 import { addSelectionLine, getRectangleSelection } from "./selection";
-import { getExportCellSize, quantizeGridByMode } from "./image-processing";
+import { getDominantColorCode, getExportCellSize, quantizeGridByMode } from "./image-processing";
 
 type BeadColor = {
   code: string;
@@ -111,6 +111,7 @@ const MIN_GRID_SIZE = 8;
 const MAX_GRID_SIZE = 160;
 const SIZE_PRESETS = [16, 32, 64, 128];
 const IMAGE_SAMPLES_PER_CELL = 4;
+const PEGBOARD_GRID_SIZE = 29;
 
 function hexToRgb(hex: string): [number, number, number] {
   return [
@@ -798,17 +799,20 @@ export function BeadStudio() {
       context.drawImage(image, sx, sy, sw, sh, 0, 0, sampleCanvas.width, sampleCanvas.height);
       const pixels = context.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height).data;
       const firstPass = quantizeGridByMode(pixels, targetWidth, targetHeight, IMAGE_SAMPLES_PER_CELL, RGB_PALETTE);
+      const backgroundCode = getDominantColorCode(firstPass);
       const frequency = new Map<string, number>();
-      for (const code of firstPass) if (code) frequency.set(code, (frequency.get(code) ?? 0) + 1);
+      for (const code of firstPass) if (code && code !== backgroundCode) frequency.set(code, (frequency.get(code) ?? 0) + 1);
       const allowedCodes = [...frequency.entries()]
         .sort((a, b) => b[1] - a[1])
         .slice(0, limit)
         .map(([code]) => code);
       const allowed = RGB_PALETTE.filter((color) => allowedCodes.includes(color.code));
-      const next = allowedCodes.length >= frequency.size
+      const quantized = allowedCodes.length >= frequency.size
         ? firstPass
         : quantizeGridByMode(pixels, targetWidth, targetHeight, IMAGE_SAMPLES_PER_CELL, allowed);
-      commitGrid(next, `已生成 ${targetWidth} × ${targetHeight} 图纸`, false, targetWidth, targetHeight);
+      const next = quantized.map((code, index) => firstPass[index] === backgroundCode ? null : code);
+      const backgroundMessage = backgroundCode ? `，${backgroundCode} 已识别为背景` : "";
+      commitGrid(next, `已生成 ${targetWidth} × ${targetHeight} 图纸${backgroundMessage}`, false, targetWidth, targetHeight);
     } catch (error) {
       console.error("[BEAD_GENERATE]", JSON.stringify({ message: error instanceof Error ? error.message : String(error) }));
       setToast("图片处理失败，请换一张图片重试");
@@ -877,8 +881,6 @@ export function BeadStudio() {
     grid.forEach((code, index) => {
       const x = index % width;
       const y = Math.floor(index / width);
-      context.strokeStyle = "#ddd4c6";
-      context.strokeRect(x * cell, y * cell, cell, cell);
       if (!code) return;
       const color = colorMap.get(code);
       context.fillStyle = color?.hex ?? "#fff";
@@ -891,6 +893,35 @@ export function BeadStudio() {
       context.textBaseline = "middle";
       context.fillText(code, x * cell + cell / 2, y * cell + cell / 2);
     });
+    context.lineWidth = Math.max(1, cell * .025);
+    context.strokeStyle = "#d8d0c2";
+    context.beginPath();
+    for (let x = 0; x <= width; x += 1) {
+      context.moveTo(x * cell, 0);
+      context.lineTo(x * cell, output.height);
+    }
+    for (let y = 0; y <= height; y += 1) {
+      context.moveTo(0, y * cell);
+      context.lineTo(output.width, y * cell);
+    }
+    context.stroke();
+
+    context.lineWidth = Math.max(2.5, cell * .085);
+    context.strokeStyle = "#756c60";
+    context.beginPath();
+    for (let x = 0; x <= width; x += PEGBOARD_GRID_SIZE) {
+      context.moveTo(x * cell, 0);
+      context.lineTo(x * cell, output.height);
+    }
+    for (let y = 0; y <= height; y += PEGBOARD_GRID_SIZE) {
+      context.moveTo(0, y * cell);
+      context.lineTo(output.width, y * cell);
+    }
+    context.moveTo(output.width, 0);
+    context.lineTo(output.width, output.height);
+    context.moveTo(0, output.height);
+    context.lineTo(output.width, output.height);
+    context.stroke();
     output.toBlob((blob) => {
       if (!blob) {
         console.error("[BEAD_EXPORT]", JSON.stringify({ action: "png", width: output.width, height: output.height, message: "Canvas returned an empty blob" }));
