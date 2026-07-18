@@ -29,6 +29,7 @@
 - Hide scrollbars throughout the page while preserving touch, wheel, trackpad, and keyboard scrolling.
 - Scope WebKit scrollbar styling to real scroll containers so mobile Safari continues painting the canvas workspace.
 - Route horizontal touch gestures on the mobile color strip to its own scroller so every swatch remains reachable.
+- Contain the 32-color strip within the mobile panel so its intrinsic width cannot push the centered canvas outside the viewport.
 - Reduce the aspect-ratio lock control to a lightweight icon-only action with an accessible label.
 - Fit the entire canvas into the available desktop or mobile workspace by default.
 - Keep every edge of a manually zoomed canvas reachable inside the scroll area.

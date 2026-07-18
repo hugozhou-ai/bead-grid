@@ -280,15 +280,15 @@ footer p:first-child { transform: rotate(-.35deg); }
   .workspace::after { display: none; }
   .control-panel { border-right: 0; border-bottom: 1.5px solid var(--line); padding: 20px; }
   .upload-card { min-height: 105px; }
-  .canvas-panel { min-height: 580px; }
-  .canvas-toolbar { overflow-x: auto; }
+  .canvas-panel { width: 100%; max-width: 100%; min-height: 580px; }
+  .canvas-toolbar { width: 100%; max-width: 100%; overflow-x: auto; }
   .toolbar-right .toggle { display: none; }
   .canvas-stage { min-height: 430px; }
   .canvas-scroll { padding: 34px 18px 58px; }
   .canvas-scroll.has-selection { padding-top: 68px; }
   .selection-actions { left: 12px; right: 12px; transform: rotate(-.3deg); max-width: none; }
-  .palette-strip { position: sticky; bottom: 0; z-index: 8; }
-  .swatches { display: flex; overflow-x: auto; padding: 3px 2px; touch-action: pan-x; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
+  .palette-strip { width: 100%; max-width: 100%; min-width: 0; position: sticky; bottom: 0; z-index: 8; overflow: hidden; }
+  .swatches { width: 100%; max-width: 100%; min-width: 0; display: flex; overflow-x: auto; padding: 3px 2px; touch-action: pan-x; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
   .swatches button { width: 31px; min-width: 31px; }
   .material-panel { display: block; padding: 22px 20px 28px; border-top: 1.5px solid var(--line); }
   .material-panel .panel-heading { margin-bottom: 18px; }

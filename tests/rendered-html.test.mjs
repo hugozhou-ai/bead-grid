@@ -66,7 +66,10 @@ test("uses the hand-inked visual system across the page and canvas", async () =>
   assert.match(styles, /scrollbar-width: none/);
   assert.match(styles, /\.canvas-scroll::\-webkit-scrollbar/);
   assert.doesNotMatch(styles, /\*::\-webkit-scrollbar|display: none;[^}]*scrollbar/);
-  assert.match(styles, /\.swatches \{ display: flex; overflow-x: auto;[^}]*touch-action: pan-x;[^}]*overscroll-behavior-inline: contain/);
+  assert.match(styles, /\.swatches \{[^}]*overflow-x: auto;[^}]*touch-action: pan-x;[^}]*overscroll-behavior-inline: contain/);
+  assert.match(styles, /\.canvas-panel \{ width: 100%; max-width: 100%; min-height: 580px; \}/);
+  assert.match(styles, /\.palette-strip \{ width: 100%; max-width: 100%; min-width: 0;[^}]*overflow: hidden; \}/);
+  assert.match(styles, /\.swatches \{ width: 100%; max-width: 100%; min-width: 0;[^}]*overflow-x: auto/);
   assert.match(source, /context\.ellipse\(centerX, centerY/);
   assert.match(source, /const wobble =/);
   assert.match(source, /document\.fonts\.load\('700 16px "LXGW WenKai"'/);
