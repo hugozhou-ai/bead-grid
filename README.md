@@ -37,6 +37,18 @@ npm test
 npm run test:pages
 ```
 
+## 批量导出图纸
+
+批处理脚本递归读取输入目录中的 JPG、PNG 和 WEBP，并复用网页端的色板、4×4 多点采样、颜色收敛和导出尺寸计算逻辑。默认参数为 64×64 网格、10 色、关闭自动移除背景、52×52 拼豆板：
+
+```bash
+npm run batch:export -- \
+  --input /path/to/images \
+  --output /path/to/patterns
+```
+
+可通过 `--grid 64x64`、`--colors 10`、`--remove-background false`、`--pegboard 52` 和 `--concurrency 2` 显式覆盖参数。输出目录会保留输入目录结构，并生成 `README.txt` 与包含逐文件颜色用量、尺寸和 SHA-256 的 `manifest.json`。
+
 ## 在线访问与自动部署
 
 线上地址：[https://hugozhou-ai.github.io/bead-grid/](https://hugozhou-ai.github.io/bead-grid/)

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getDominantColorCode, getExportCellSize, quantizeGridByMode } from "../app/image-processing.ts";
+import { createPatternFromPixels, getDominantColorCode, getExportCellSize, getExportLayout, quantizeGridByMode } from "../app/image-processing.ts";
 
 const palette = [
   { code: "RED", rgb: [240, 40, 40] },
@@ -33,7 +33,29 @@ test("scales PNG cell resolution with the grid while keeping large exports bound
   assert.equal(getExportCellSize(200, 160), 32);
 });
 
+test("calculates the complete export canvas layout", () => {
+  assert.deepEqual(getExportLayout(64, 64), {
+    cell: 64,
+    labelGutter: 55,
+    gridPixelWidth: 4096,
+    gridPixelHeight: 4096,
+    outputWidth: 4206,
+    outputHeight: 4206,
+  });
+});
+
 test("detects the most frequent non-transparent color as the background", () => {
   assert.equal(getDominantColorCode([null, "A02", "A01", "A02", null, "A02", "A01"]), "A02");
   assert.equal(getDominantColorCode([null, null]), null);
+});
+
+test("limits colors without removing the background when the switch is off", () => {
+  const samples = [
+    ...Array.from({ length: 8 }, () => [240, 40, 40]),
+    ...Array.from({ length: 8 }, () => [40, 40, 240]),
+  ];
+  const result = createPatternFromPixels(pixels(samples), 1, 1, 4, palette, 1, false);
+  assert.equal(result.backgroundCode, null);
+  assert.deepEqual(result.allowedCodes, ["RED"]);
+  assert.deepEqual(result.cells, ["RED"]);
 });

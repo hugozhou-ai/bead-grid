@@ -60,6 +60,21 @@ export function getExportCellSize(width: number, height: number) {
   return Math.max(32, Math.min(96, Math.ceil(4096 / longestEdge)));
 }
 
+export function getExportLayout(width: number, height: number) {
+  const cell = getExportCellSize(width, height);
+  const labelGutter = Math.max(24, Math.ceil(cell * .85));
+  const gridPixelWidth = width * cell;
+  const gridPixelHeight = height * cell;
+  return {
+    cell,
+    labelGutter,
+    gridPixelWidth,
+    gridPixelHeight,
+    outputWidth: gridPixelWidth + labelGutter * 2,
+    outputHeight: gridPixelHeight + labelGutter * 2,
+  };
+}
+
 export function getDominantColorCode(cells: Array<string | null>) {
   const frequency = new Map<string, number>();
   for (const code of cells) if (code) frequency.set(code, (frequency.get(code) ?? 0) + 1);
@@ -72,4 +87,37 @@ export function getDominantColorCode(cells: Array<string | null>) {
     }
   }
   return dominantCode;
+}
+
+export function createPatternFromPixels(
+  pixels: Uint8ClampedArray,
+  targetWidth: number,
+  targetHeight: number,
+  samplesPerCell: number,
+  palette: QuantizationColor[],
+  colorLimit: number,
+  removeBackground: boolean,
+) {
+  const firstPass = quantizeGridByMode(
+    pixels,
+    targetWidth,
+    targetHeight,
+    samplesPerCell,
+    palette,
+  );
+  const backgroundCode = removeBackground ? getDominantColorCode(firstPass) : null;
+  const frequency = new Map<string, number>();
+  for (const code of firstPass) {
+    if (code && code !== backgroundCode) frequency.set(code, (frequency.get(code) ?? 0) + 1);
+  }
+  const allowedCodes = [...frequency.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, colorLimit)
+    .map(([code]) => code);
+  const allowed = palette.filter((color) => allowedCodes.includes(color.code));
+  const quantized = allowedCodes.length >= frequency.size
+    ? firstPass
+    : quantizeGridByMode(pixels, targetWidth, targetHeight, samplesPerCell, allowed);
+  const cells = quantized.map((code, index) => firstPass[index] === backgroundCode ? null : code);
+  return { cells, backgroundCode, allowedCodes };
 }

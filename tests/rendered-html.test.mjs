@@ -41,6 +41,7 @@ test("server-renders the Bead Grid application", async () => {
 
 test("provides project persistence and non-destructive resizing", async () => {
   const source = await readFile(new URL("../app/bead-studio.tsx", import.meta.url), "utf8");
+  const processing = await readFile(new URL("../app/image-processing.ts", import.meta.url), "utf8");
 
   assert.match(source, /bead-grid\.project\.v2/);
   assert.match(source, /window\.localStorage\.setItem/);
@@ -54,13 +55,16 @@ test("provides project persistence and non-destructive resizing", async () => {
   assert.match(source, /useState\(false\).*autoRemoveBackground|autoRemoveBackground.*useState\(false\)/s);
   assert.match(source, /candidate\.autoRemoveBackground === true/);
   assert.match(source, /id="auto-remove-background"/);
-  assert.match(source, /removeBackground \? getDominantColorCode\(firstPass\) : null/);
+  assert.match(source, /createPatternFromPixels\(/);
+  assert.match(processing, /removeBackground \? getDominantColorCode\(firstPass\) : null/);
   assert.doesNotMatch(source, /else commitGrid\(createDemo/);
   assert.doesNotMatch(source, /project-name-field/);
 });
 
 test("uses the hand-inked visual system across the page and canvas", async () => {
   const source = await readFile(new URL("../app/bead-studio.tsx", import.meta.url), "utf8");
+  const processing = await readFile(new URL("../app/image-processing.ts", import.meta.url), "utf8");
+  const palette = await readFile(new URL("../app/bead-palette.ts", import.meta.url), "utf8");
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 
   assert.match(styles, /--pen-font:/);
@@ -79,10 +83,11 @@ test("uses the hand-inked visual system across the page and canvas", async () =>
   assert.match(source, /document\.fonts\.load\('700 16px "LXGW WenKai"'/);
   assert.match(source, /\[BEAD_FONT\]/);
   assert.match(source, /context\.font = `700 .*"LXGW WenKai"/);
-  assert.match(source, /getExportCellSize\(width, height\)/);
-  assert.match(source, /quantizeGridByMode\(pixels, targetWidth, targetHeight/);
-  assert.match(source, /getDominantColorCode\(firstPass\)/);
-  assert.match(source, /firstPass\[index\] === backgroundCode \? null : code/);
+  assert.match(source, /getExportLayout\(width, height\)/);
+  assert.match(source, /createPatternFromPixels\(/);
+  assert.match(processing, /quantizeGridByMode\(pixels, targetWidth, targetHeight/);
+  assert.match(processing, /getDominantColorCode\(firstPass\)/);
+  assert.match(processing, /firstPass\[index\] === backgroundCode \? null : code/);
   assert.match(source, /PEGBOARD_SIZE_OPTIONS = \[52, 78, 104, 120\]/);
   assert.match(source, /useState<number>\(PEGBOARD_SIZE_OPTIONS\[0\]\)/);
   assert.match(source, /<h2 id="export-dialog-title">拼豆板尺寸<\/h2>/);
@@ -92,7 +97,8 @@ test("uses the hand-inked visual system across the page and canvas", async () =>
   assert.match(source, /context\.fillText\(String\(x \+ 1\), centerX, labelGutter \/ 2\)/);
   assert.match(source, /context\.fillText\(String\(y \+ 1\), labelGutter \/ 2, centerY\)/);
   assert.doesNotMatch(source, /PEGBOARD_GRID_SIZE|save-dialog-heading|save-dialog-actions/);
-  assert.match(source, /function beadLabelColor/);
+  assert.match(source, /beadLabelColor/);
+  assert.match(palette, /function beadLabelColor/);
 });
 
 test("keeps browser zoom interception scoped to the canvas workspace", async () => {

@@ -9,6 +9,7 @@
 
 ### Features
 
+- Add recursive CLI batch export for JPG, PNG, and WEBP sources with configurable grid, color, background, pegboard, and concurrency settings plus per-file manifests and checksums.
 - Raise the grid limit to 160×160 and expand the general palette and color limit from 16 to 32 colors.
 - Sample multiple source pixels per bead and choose the modal palette code instead of averaging each region during image downscaling.
 - Size PNG exports dynamically from the grid dimensions so dense patterns retain sharp grids and color codes.
