@@ -60,18 +60,37 @@ export function getExportCellSize(width: number, height: number) {
   return Math.max(32, Math.min(96, Math.ceil(4096 / longestEdge)));
 }
 
-export function getExportLayout(width: number, height: number) {
+export function getExportLayout(width: number, height: number, legendItemCount = 0) {
   const cell = getExportCellSize(width, height);
   const labelGutter = Math.max(24, Math.ceil(cell * .85));
   const gridPixelWidth = width * cell;
   const gridPixelHeight = height * cell;
+  const baseHeight = gridPixelHeight + labelGutter * 2;
+  const legendPadding = Math.max(24, Math.ceil(cell * .5));
+  const legendHeaderHeight = Math.max(36, Math.ceil(cell * .7));
+  const legendItemHeight = Math.max(40, Math.ceil(cell * .72));
+  const availableLegendWidth = gridPixelWidth + labelGutter * 2 - legendPadding * 2;
+  const legendColumns = legendItemCount > 0
+    ? Math.max(1, Math.min(4, Math.floor(availableLegendWidth / Math.max(280, cell * 3.6))))
+    : 0;
+  const legendRows = legendColumns ? Math.ceil(legendItemCount / legendColumns) : 0;
+  const legendHeight = legendRows
+    ? legendPadding * 2 + legendHeaderHeight + legendRows * legendItemHeight
+    : 0;
   return {
     cell,
     labelGutter,
     gridPixelWidth,
     gridPixelHeight,
+    legendTop: baseHeight,
+    legendPadding,
+    legendHeaderHeight,
+    legendItemHeight,
+    legendColumns,
+    legendRows,
+    legendHeight,
     outputWidth: gridPixelWidth + labelGutter * 2,
-    outputHeight: gridPixelHeight + labelGutter * 2,
+    outputHeight: baseHeight + legendHeight,
   };
 }
 

@@ -31,13 +31,13 @@ import {
   X,
 } from "lucide-react";
 import { addSelectionLine, getRectangleSelection } from "./selection";
-import { beadLabelColor, PALETTE, PALETTE_NAME, RGB_PALETTE } from "./bead-palette";
+import { beadLabelColor, LEGACY_CODE_MAP, LEGACY_PALETTE_NAME, PALETTE, PALETTE_NAME, RGB_PALETTE } from "./bead-palette";
 import { createPatternFromPixels, getExportLayout } from "./image-processing";
 
 type Tool = "paint" | "erase" | "pick" | "select";
 
 type StoredProject = {
-  version: 2;
+  version: 3;
   name: string;
   width: number;
   height: number;
@@ -80,9 +80,9 @@ function createDemo(width: number, height: number): Array<string | null> {
     const py = y * 2 - 0.25;
     const heart = (px * px + py * py - 0.58) ** 3 - px * px * py ** 3 < 0;
     if (!heart) return null;
-    if (py < -0.35 && px < 0.1) return "A06";
-    if (py > 0.35) return "A05";
-    return "A04";
+    if (py < -0.35 && px < 0.1) return LEGACY_CODE_MAP.A06;
+    if (py > 0.35) return LEGACY_CODE_MAP.A05;
+    return LEGACY_CODE_MAP.A04;
   });
 }
 
@@ -116,17 +116,23 @@ function parseStoredProject(value: unknown): StoredProject {
   const height = clampGridSize(Number(candidate.height));
   if (candidate.width !== width || candidate.height !== height) throw new Error(`图纸尺寸超出 ${MIN_GRID_SIZE}–${MAX_GRID_SIZE} 范围`);
   if (!Array.isArray(candidate.cells) || candidate.cells.length !== width * height) throw new Error("图纸格子数量与尺寸不一致");
+  const usesLegacyPalette = Number(candidate.version) === 2 || candidate.palette === LEGACY_PALETTE_NAME;
+  const migratedCells = candidate.cells.map((cell) => {
+    if (cell === null) return null;
+    if (typeof cell !== "string") throw new Error("图纸包含无效色号");
+    return usesLegacyPalette ? LEGACY_CODE_MAP[cell] : cell;
+  });
   const validCodes = new Set(PALETTE.map((color) => color.code));
-  if (candidate.cells.some((cell) => cell !== null && (typeof cell !== "string" || !validCodes.has(cell)))) throw new Error("图纸包含未知色号");
+  if (migratedCells.some((cell) => !cell || !validCodes.has(cell))) throw new Error("图纸包含未知色号");
   return {
-    version: 2,
+    version: 3,
     name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim().slice(0, 80) : "未命名拼豆项目",
     width,
     height,
     colorLimit: Math.max(3, Math.min(PALETTE.length, Math.round(Number(candidate.colorLimit) || 10))),
     autoRemoveBackground: candidate.autoRemoveBackground === true,
     palette: PALETTE_NAME,
-    cells: candidate.cells,
+    cells: migratedCells,
     savedAt: typeof candidate.savedAt === "string" ? candidate.savedAt : new Date().toISOString(),
   };
 }
@@ -143,7 +149,7 @@ export function BeadStudio() {
   const [grid, setGrid] = useState<Array<string | null>>(() => createDemo(32, 32));
   const [sourceName, setSourceName] = useState("示例爱心");
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
-  const [selectedColor, setSelectedColor] = useState("A04");
+  const [selectedColor, setSelectedColor] = useState(LEGACY_CODE_MAP.A04);
   const [tool, setTool] = useState<Tool>("paint");
   const [zoom, setZoom] = useState(1);
   const [fitZoom, setFitZoom] = useState(1);
@@ -205,7 +211,7 @@ export function BeadStudio() {
     let active = true;
     Promise.all([
       document.fonts.load('400 16px "LXGW WenKai"', "豆格拼豆图纸"),
-      document.fonts.load('700 16px "LXGW WenKai"', "色号A04"),
+      document.fonts.load('700 16px "LXGW WenKai"', "色号A1B1C1D1E1F1G1H1M1"),
     ])
       .then(() => {
         if (active) setCanvasFontReady(true);
@@ -250,7 +256,7 @@ export function BeadStudio() {
     const timer = window.setTimeout(() => {
       try {
         const savedAt = new Date().toISOString();
-        const project: StoredProject = { version: 2, name: sourceName, width, height, colorLimit, autoRemoveBackground, palette: PALETTE_NAME, cells: grid, savedAt };
+        const project: StoredProject = { version: 3, name: sourceName, width, height, colorLimit, autoRemoveBackground, palette: PALETTE_NAME, cells: grid, savedAt };
         window.localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(project));
         setDraftSavedAt(savedAt);
       } catch (error) {
@@ -810,14 +816,26 @@ export function BeadStudio() {
 
   async function exportPng(pegboardSize: number) {
     try {
-      await document.fonts.load('700 16px "LXGW WenKai"', "A0123456789");
+      await document.fonts.load('700 16px "LXGW WenKai"', "A1B1C1D1E1F1G1H1M1 0123456789");
     } catch (error) {
       console.error("[BEAD_EXPORT]", JSON.stringify({ action: "load-font", message: error instanceof Error ? error.message : String(error) }));
       setToast("导出字体加载失败，请检查网络后重试");
       return;
     }
     const output = document.createElement("canvas");
-    const { cell, labelGutter, gridPixelWidth, gridPixelHeight, outputWidth, outputHeight } = getExportLayout(width, height);
+    const {
+      cell,
+      labelGutter,
+      gridPixelWidth,
+      gridPixelHeight,
+      legendTop,
+      legendPadding,
+      legendHeaderHeight,
+      legendItemHeight,
+      legendColumns,
+      outputWidth,
+      outputHeight,
+    } = getExportLayout(width, height, counts.length);
     output.width = outputWidth;
     output.height = outputHeight;
     const context = output.getContext("2d");
@@ -886,6 +904,45 @@ export function BeadStudio() {
       context.fillText(String(y + 1), labelGutter / 2, centerY);
       context.fillText(String(y + 1), labelGutter + gridPixelWidth + labelGutter / 2, centerY);
     }
+    if (counts.length && legendColumns) {
+      const legendWidth = outputWidth - legendPadding * 2;
+      const columnWidth = legendWidth / legendColumns;
+      const headerY = legendTop + legendPadding + legendHeaderHeight / 2;
+      context.strokeStyle = "#756c60";
+      context.lineWidth = Math.max(2, cell * .05);
+      context.beginPath();
+      context.moveTo(legendPadding, legendTop);
+      context.lineTo(outputWidth - legendPadding, legendTop);
+      context.stroke();
+      context.fillStyle = "#282722";
+      context.font = `700 ${Math.max(20, cell * .42)}px "LXGW WenKai", sans-serif`;
+      context.textAlign = "left";
+      context.fillText("材料清单", legendPadding, headerY);
+      context.fillStyle = "#756c60";
+      context.font = `700 ${Math.max(15, cell * .27)}px "LXGW WenKai", sans-serif`;
+      context.textAlign = "right";
+      context.fillText(`共 ${total.toLocaleString()} 颗 · ${counts.length} 种颜色`, outputWidth - legendPadding, headerY);
+      counts.forEach(({ color, count }, index) => {
+        const column = index % legendColumns;
+        const row = Math.floor(index / legendColumns);
+        const x = legendPadding + column * columnWidth;
+        const y = legendTop + legendPadding + legendHeaderHeight + row * legendItemHeight + legendItemHeight / 2;
+        const swatchRadius = Math.max(12, cell * .24);
+        context.fillStyle = color.hex;
+        context.beginPath();
+        context.arc(x + swatchRadius, y, swatchRadius, 0, Math.PI * 2);
+        context.fill();
+        context.strokeStyle = "#514b42";
+        context.lineWidth = Math.max(1.5, cell * .025);
+        context.stroke();
+        context.fillStyle = "#282722";
+        context.font = `700 ${Math.max(16, cell * .31)}px "LXGW WenKai", sans-serif`;
+        context.textAlign = "left";
+        context.fillText(`${color.code} · ${color.name}`, x + swatchRadius * 2 + cell * .18, y);
+        context.textAlign = "right";
+        context.fillText(`${count.toLocaleString()} 颗`, x + columnWidth - cell * .22, y);
+      });
+    }
     output.toBlob((blob) => {
       if (!blob) {
         console.error("[BEAD_EXPORT]", JSON.stringify({ action: "png", width: output.width, height: output.height, message: "Canvas returned an empty blob" }));
@@ -908,7 +965,7 @@ export function BeadStudio() {
 
   function confirmProjectSave() {
     const projectName = saveNameDraft.trim().slice(0, 80) || "未命名拼豆项目";
-    const data = JSON.stringify({ version: 2, name: projectName, width, height, colorLimit, autoRemoveBackground, palette: PALETTE_NAME, cells: grid, savedAt: new Date().toISOString() }, null, 2);
+    const data = JSON.stringify({ version: 3, name: projectName, width, height, colorLimit, autoRemoveBackground, palette: PALETTE_NAME, cells: grid, savedAt: new Date().toISOString() }, null, 2);
     setSourceName(projectName);
     setIsSaveDialogOpen(false);
     downloadBlob(new Blob([data], { type: "application/json" }), `${projectName}.json`);
@@ -1028,7 +1085,7 @@ export function BeadStudio() {
 
           <div className="field-group">
             <label>色板</label>
-            <div className="palette-card"><Palette aria-hidden="true" /><span><strong>通用综合色板 · {PALETTE.length} 色</strong><small>当前项目固定使用此色板</small></span></div>
+            <div className="palette-card"><Palette aria-hidden="true" /><span><strong>MARD 标准色板 · {PALETTE.length} 色</strong><small>A–H、M 多系列常用采购色号</small></span></div>
             <small>屏幕颜色仅供模拟，实体颜色可能因品牌与批次略有差异</small>
           </div>
 
@@ -1166,7 +1223,7 @@ export function BeadStudio() {
               <div><span><Scan aria-hidden="true" /></span><h2 id="export-dialog-title">拼豆板尺寸</h2></div>
               <button type="button" aria-label="关闭导出窗口" title="关闭" onClick={() => setIsExportDialogOpen(false)}><X aria-hidden="true" /></button>
             </div>
-            <p>粗网格线将按所选拼豆板尺寸划分，逐豆细网格会继续保留。</p>
+            <p>粗网格线将按所选拼豆板尺寸划分；图纸底部会附上所有色号、颜色名称和所需颗数。</p>
             <div className="board-size-options" role="group" aria-label="选择拼豆板尺寸">
               {PEGBOARD_SIZE_OPTIONS.map((size) => (
                 <button type="button" key={size} className={exportBoardSize === size ? "active" : ""} aria-pressed={exportBoardSize === size} onClick={() => setExportBoardSize(size)}>{size} × {size}</button>
@@ -1174,7 +1231,7 @@ export function BeadStudio() {
             </div>
             <div className="action-dialog-actions">
               <button type="button" className="quiet-button" onClick={() => setIsExportDialogOpen(false)}>取消</button>
-              <button type="submit" className="primary-button icon-label"><Download aria-hidden="true" />导出 PNG</button>
+              <button type="submit" className="primary-button icon-label"><Download aria-hidden="true" />导出图纸＋材料清单</button>
             </div>
           </form>
         </div>

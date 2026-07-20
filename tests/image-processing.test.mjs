@@ -39,9 +39,24 @@ test("calculates the complete export canvas layout", () => {
     labelGutter: 55,
     gridPixelWidth: 4096,
     gridPixelHeight: 4096,
+    legendTop: 4206,
+    legendPadding: 32,
+    legendHeaderHeight: 45,
+    legendItemHeight: 47,
+    legendColumns: 0,
+    legendRows: 0,
+    legendHeight: 0,
     outputWidth: 4206,
     outputHeight: 4206,
   });
+});
+
+test("reserves rows below the pattern for every material legend item", () => {
+  const layout = getExportLayout(8, 8, 5);
+  assert.equal(layout.legendColumns, 2);
+  assert.equal(layout.legendRows, 3);
+  assert.equal(layout.legendTop, 932);
+  assert.equal(layout.outputHeight, 1306);
 });
 
 test("detects the most frequent non-transparent color as the background", () => {

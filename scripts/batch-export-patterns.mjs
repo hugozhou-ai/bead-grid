@@ -106,7 +106,25 @@ function makePegboardPath(width, height, cell, pegboardSize) {
 export function renderPatternSvg(cells, width, height, pegboardSize) {
   if (cells.length !== width * height) throw new Error("图纸格子数量与尺寸不一致");
   const colorMap = new Map(PALETTE.map((color) => [color.code, color]));
-  const { cell, labelGutter, gridPixelWidth, gridPixelHeight, outputWidth, outputHeight } = getExportLayout(width, height);
+  const frequency = new Map();
+  for (const code of cells) if (code) frequency.set(code, (frequency.get(code) ?? 0) + 1);
+  const usage = [...frequency.entries()]
+    .map(([code, count]) => ({ color: colorMap.get(code), count }))
+    .sort((left, right) => right.count - left.count);
+  const total = usage.reduce((sum, item) => sum + item.count, 0);
+  const {
+    cell,
+    labelGutter,
+    gridPixelWidth,
+    gridPixelHeight,
+    legendTop,
+    legendPadding,
+    legendHeaderHeight,
+    legendItemHeight,
+    legendColumns,
+    outputWidth,
+    outputHeight,
+  } = getExportLayout(width, height, usage.length);
   const beadFontSize = Math.max(9, cell * .29);
   const axisFontSize = Math.max(9, cell * .26);
   const beads = cells.flatMap((code, index) => {
@@ -130,6 +148,18 @@ export function renderPatternSvg(cells, width, height, pegboardSize) {
     const label = y + 1;
     return `<text x="${labelGutter / 2}" y="${centerY}" text-anchor="middle" dominant-baseline="central">${label}</text><text x="${labelGutter + gridPixelWidth + labelGutter / 2}" y="${centerY}" text-anchor="middle" dominant-baseline="central">${label}</text>`;
   }).join("");
+  const legendWidth = outputWidth - legendPadding * 2;
+  const columnWidth = legendColumns ? legendWidth / legendColumns : 0;
+  const legendItems = usage.map(({ color, count }, index) => {
+    if (!color) throw new Error("材料清单包含未知色号");
+    const column = index % legendColumns;
+    const row = Math.floor(index / legendColumns);
+    const x = legendPadding + column * columnWidth;
+    const y = legendTop + legendPadding + legendHeaderHeight + row * legendItemHeight + legendItemHeight / 2;
+    const swatchRadius = Math.max(12, cell * .24);
+    return `<circle cx="${x + swatchRadius}" cy="${y}" r="${swatchRadius}" fill="${color.hex}" stroke="#514b42" stroke-width="${Math.max(1.5, cell * .025)}"/><text x="${x + swatchRadius * 2 + cell * .18}" y="${y}" text-anchor="start" dominant-baseline="central">${escapeXml(`${color.code} · ${color.name}`)}</text><text x="${x + columnWidth - cell * .22}" y="${y}" text-anchor="end" dominant-baseline="central">${count} 颗</text>`;
+  }).join("");
+  const legend = usage.length ? `<g font-family="LXGW WenKai, sans-serif" font-weight="700"><path d="M${legendPadding} ${legendTop}H${outputWidth - legendPadding}" stroke="#756c60" stroke-width="${Math.max(2, cell * .05)}"/><text x="${legendPadding}" y="${legendTop + legendPadding + legendHeaderHeight / 2}" fill="#282722" font-size="${Math.max(20, cell * .42)}" dominant-baseline="central">材料清单</text><text x="${outputWidth - legendPadding}" y="${legendTop + legendPadding + legendHeaderHeight / 2}" fill="#756c60" font-size="${Math.max(15, cell * .27)}" text-anchor="end" dominant-baseline="central">共 ${total} 颗 · ${usage.length} 种颜色</text><g fill="#282722" font-size="${Math.max(16, cell * .31)}">${legendItems}</g></g>` : "";
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${outputWidth}" height="${outputHeight}" viewBox="0 0 ${outputWidth} ${outputHeight}">
   <rect width="100%" height="100%" fill="#fffdf8"/>
@@ -139,6 +169,7 @@ export function renderPatternSvg(cells, width, height, pegboardSize) {
     <path d="${makePegboardPath(width, height, cell, pegboardSize)}" fill="none" stroke="#756c60" stroke-width="${Math.max(2.5, cell * .085)}"/>
   </g>
   <g fill="#514b42" font-family="LXGW WenKai, sans-serif" font-size="${axisFontSize}" font-weight="700">${columnLabels}${rowLabels}</g>
+  ${legend}
 </svg>`;
 }
 

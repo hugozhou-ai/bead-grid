@@ -83,7 +83,7 @@ test("uses the hand-inked visual system across the page and canvas", async () =>
   assert.match(source, /document\.fonts\.load\('700 16px "LXGW WenKai"'/);
   assert.match(source, /\[BEAD_FONT\]/);
   assert.match(source, /context\.font = `700 .*"LXGW WenKai"/);
-  assert.match(source, /getExportLayout\(width, height\)/);
+  assert.match(source, /getExportLayout\(width, height, counts\.length\)/);
   assert.match(source, /createPatternFromPixels\(/);
   assert.match(processing, /quantizeGridByMode\(pixels, targetWidth, targetHeight/);
   assert.match(processing, /getDominantColorCode\(firstPass\)/);
@@ -91,6 +91,10 @@ test("uses the hand-inked visual system across the page and canvas", async () =>
   assert.match(source, /PEGBOARD_SIZE_OPTIONS = \[52, 78, 104, 120\]/);
   assert.match(source, /useState<number>\(PEGBOARD_SIZE_OPTIONS\[0\]\)/);
   assert.match(source, /<h2 id="export-dialog-title">拼豆板尺寸<\/h2>/);
+  assert.match(source, /图纸底部会附上所有色号、颜色名称和所需颗数/);
+  assert.match(source, /导出图纸＋材料清单/);
+  assert.match(source, /MARD 标准色板/);
+  assert.match(source, /LEGACY_CODE_MAP\[cell\]/);
   assert.match(source, /x \+= pegboardSize/);
   assert.match(source, /y \+= pegboardSize/);
   assert.match(source, /context\.translate\(labelGutter, labelGutter\)/);
