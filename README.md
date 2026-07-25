@@ -47,7 +47,16 @@ npm run batch:export -- \
   --output /path/to/patterns
 ```
 
-可通过 `--grid 64x64`、`--colors 10`、`--remove-background false`、`--pegboard 52` 和 `--concurrency 2` 显式覆盖参数。输出目录会保留输入目录结构，并生成 `README.txt` 与包含逐文件颜色用量、尺寸和 SHA-256 的 `manifest.json`。
+可通过 `--grid 64x64`、`--colors 10`、`--remove-background false`、`--pegboard 52` 和 `--concurrency 2` 显式覆盖参数。输出目录会保留输入目录结构；每张 PNG 都会生成一个可直接在网页中打开的同名 JSON 项目源文件，并生成 `README.txt` 与包含逐文件颜色用量、尺寸和 SHA-256 的 `manifest.json`。
+
+旧批次只有 PNG、没有项目 JSON 时，可从无损图纸中恢复逐格色号并统一回填：
+
+```bash
+npm run projects:backfill -- \
+  --root /path/to/outputs
+```
+
+脚本会递归扫描批量导出的 `manifest.json`，验证恢复后的颜色用量与原 manifest 完全一致，再写入同名 JSON，并把项目文件路径及 SHA-256 回写到 manifest。需要覆盖已有 JSON 时增加 `--force`。
 
 ## 在线访问与自动部署
 

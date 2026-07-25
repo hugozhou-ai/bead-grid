@@ -41,19 +41,20 @@ test("server-renders the Bead Grid application", async () => {
 
 test("provides project persistence and non-destructive resizing", async () => {
   const source = await readFile(new URL("../app/bead-studio.tsx", import.meta.url), "utf8");
+  const projectFormat = await readFile(new URL("../app/project-format.ts", import.meta.url), "utf8");
   const processing = await readFile(new URL("../app/image-processing.ts", import.meta.url), "utf8");
 
   assert.match(source, /bead-grid\.project\.v2/);
   assert.match(source, /window\.localStorage\.setItem/);
   assert.match(source, /function importProject/);
   assert.match(source, /function resizeGrid/);
-  assert.match(source, /MAX_GRID_SIZE = 160/);
+  assert.match(projectFormat, /MAX_PROJECT_GRID_SIZE = 160/);
   assert.match(source, /max=\{MAX_GRID_SIZE\}/);
   assert.match(source, /max=\{PALETTE\.length\}/);
   assert.match(source, /function openSaveProjectDialog/);
   assert.match(source, /role="dialog"/);
   assert.match(source, /useState\(false\).*autoRemoveBackground|autoRemoveBackground.*useState\(false\)/s);
-  assert.match(source, /candidate\.autoRemoveBackground === true/);
+  assert.match(projectFormat, /candidate\.autoRemoveBackground === true/);
   assert.match(source, /id="auto-remove-background"/);
   assert.match(source, /createPatternFromPixels\(/);
   assert.match(processing, /removeBackground \? getDominantColorCode\(firstPass\) : null/);
@@ -63,6 +64,7 @@ test("provides project persistence and non-destructive resizing", async () => {
 
 test("uses the hand-inked visual system across the page and canvas", async () => {
   const source = await readFile(new URL("../app/bead-studio.tsx", import.meta.url), "utf8");
+  const projectFormat = await readFile(new URL("../app/project-format.ts", import.meta.url), "utf8");
   const processing = await readFile(new URL("../app/image-processing.ts", import.meta.url), "utf8");
   const palette = await readFile(new URL("../app/bead-palette.ts", import.meta.url), "utf8");
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
@@ -94,7 +96,7 @@ test("uses the hand-inked visual system across the page and canvas", async () =>
   assert.match(source, /图纸底部会附上所有色号、颜色名称和所需颗数/);
   assert.match(source, /导出图纸＋材料清单/);
   assert.match(source, /MARD 标准色板/);
-  assert.match(source, /LEGACY_CODE_MAP\[cell\]/);
+  assert.match(projectFormat, /options\.legacyCodeMap\[cell\]/);
   assert.match(source, /x \+= pegboardSize/);
   assert.match(source, /y \+= pegboardSize/);
   assert.match(source, /context\.translate\(labelGutter, labelGutter\)/);

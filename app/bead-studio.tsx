@@ -33,20 +33,15 @@ import {
 import { addSelectionLine, getRectangleSelection } from "./selection";
 import { beadLabelColor, LEGACY_CODE_MAP, LEGACY_PALETTE_NAME, PALETTE, PALETTE_NAME, RGB_PALETTE } from "./bead-palette";
 import { createPatternFromPixels, getExportLayout } from "./image-processing";
+import {
+  createProjectFile,
+  MAX_PROJECT_GRID_SIZE,
+  MIN_PROJECT_GRID_SIZE,
+  parseProjectFile,
+  serializeProjectFile,
+} from "./project-format";
 
 type Tool = "paint" | "erase" | "pick" | "select";
-
-type StoredProject = {
-  version: 3;
-  name: string;
-  width: number;
-  height: number;
-  colorLimit: number;
-  autoRemoveBackground: boolean;
-  palette: string;
-  cells: Array<string | null>;
-  savedAt: string;
-};
 
 type GridSnapshot = {
   cells: Array<string | null>;
@@ -66,11 +61,17 @@ type SelectionGesture = {
 };
 
 const PROJECT_STORAGE_KEY = "bead-grid.project.v2";
-const MIN_GRID_SIZE = 8;
-const MAX_GRID_SIZE = 160;
+const MIN_GRID_SIZE = MIN_PROJECT_GRID_SIZE;
+const MAX_GRID_SIZE = MAX_PROJECT_GRID_SIZE;
 const SIZE_PRESETS = [16, 32, 64, 128];
 const IMAGE_SAMPLES_PER_CELL = 4;
 const PEGBOARD_SIZE_OPTIONS = [52, 78, 104, 120] as const;
+const PROJECT_PARSE_OPTIONS = {
+  paletteName: PALETTE_NAME,
+  validCodes: PALETTE.map((color) => color.code),
+  legacyPaletteName: LEGACY_PALETTE_NAME,
+  legacyCodeMap: LEGACY_CODE_MAP,
+};
 
 function createDemo(width: number, height: number): Array<string | null> {
   return Array.from({ length: width * height }, (_, index) => {
@@ -107,34 +108,6 @@ function downloadBlob(blob: Blob, filename: string) {
 
 function clampGridSize(value: number) {
   return Math.max(MIN_GRID_SIZE, Math.min(MAX_GRID_SIZE, Math.round(value || MIN_GRID_SIZE)));
-}
-
-function parseStoredProject(value: unknown): StoredProject {
-  if (!value || typeof value !== "object") throw new Error("项目内容不是对象");
-  const candidate = value as Partial<StoredProject>;
-  const width = clampGridSize(Number(candidate.width));
-  const height = clampGridSize(Number(candidate.height));
-  if (candidate.width !== width || candidate.height !== height) throw new Error(`图纸尺寸超出 ${MIN_GRID_SIZE}–${MAX_GRID_SIZE} 范围`);
-  if (!Array.isArray(candidate.cells) || candidate.cells.length !== width * height) throw new Error("图纸格子数量与尺寸不一致");
-  const usesLegacyPalette = Number(candidate.version) === 2 || candidate.palette === LEGACY_PALETTE_NAME;
-  const migratedCells = candidate.cells.map((cell) => {
-    if (cell === null) return null;
-    if (typeof cell !== "string") throw new Error("图纸包含无效色号");
-    return usesLegacyPalette ? LEGACY_CODE_MAP[cell] : cell;
-  });
-  const validCodes = new Set(PALETTE.map((color) => color.code));
-  if (migratedCells.some((cell) => !cell || !validCodes.has(cell))) throw new Error("图纸包含未知色号");
-  return {
-    version: 3,
-    name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim().slice(0, 80) : "未命名拼豆项目",
-    width,
-    height,
-    colorLimit: Math.max(3, Math.min(PALETTE.length, Math.round(Number(candidate.colorLimit) || 10))),
-    autoRemoveBackground: candidate.autoRemoveBackground === true,
-    palette: PALETTE_NAME,
-    cells: migratedCells,
-    savedAt: typeof candidate.savedAt === "string" ? candidate.savedAt : new Date().toISOString(),
-  };
 }
 
 export function BeadStudio() {
@@ -229,7 +202,7 @@ export function BeadStudio() {
       try {
         const raw = window.localStorage.getItem(PROJECT_STORAGE_KEY);
         if (raw) {
-          const project = parseStoredProject(JSON.parse(raw));
+          const project = parseProjectFile(JSON.parse(raw), PROJECT_PARSE_OPTIONS);
           setWidth(project.width);
           setHeight(project.height);
           setDraftWidth(project.width);
@@ -256,7 +229,7 @@ export function BeadStudio() {
     const timer = window.setTimeout(() => {
       try {
         const savedAt = new Date().toISOString();
-        const project: StoredProject = { version: 3, name: sourceName, width, height, colorLimit, autoRemoveBackground, palette: PALETTE_NAME, cells: grid, savedAt };
+        const project = createProjectFile({ name: sourceName, width, height, colorLimit, autoRemoveBackground, palette: PALETTE_NAME, cells: grid, savedAt });
         window.localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(project));
         setDraftSavedAt(savedAt);
       } catch (error) {
@@ -969,7 +942,7 @@ export function BeadStudio() {
 
   function confirmProjectSave() {
     const projectName = saveNameDraft.trim().slice(0, 80) || "未命名拼豆项目";
-    const data = JSON.stringify({ version: 3, name: projectName, width, height, colorLimit, autoRemoveBackground, palette: PALETTE_NAME, cells: grid, savedAt: new Date().toISOString() }, null, 2);
+    const data = serializeProjectFile(createProjectFile({ name: projectName, width, height, colorLimit, autoRemoveBackground, palette: PALETTE_NAME, cells: grid, savedAt: new Date().toISOString() }));
     setSourceName(projectName);
     setIsSaveDialogOpen(false);
     downloadBlob(new Blob([data], { type: "application/json" }), `${projectName}.json`);
@@ -981,7 +954,7 @@ export function BeadStudio() {
     if (!file) return;
     try {
       if (file.size > 5 * 1024 * 1024) throw new Error("项目文件超过 5 MB");
-      const project = parseStoredProject(JSON.parse(await file.text()));
+      const project = parseProjectFile(JSON.parse(await file.text()), PROJECT_PARSE_OPTIONS);
       if (sourceUrl) URL.revokeObjectURL(sourceUrl);
       setSourceUrl(null);
       setSourceName(project.name);

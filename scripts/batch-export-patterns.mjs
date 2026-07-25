@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import sharp from "sharp";
 import { beadLabelColor, PALETTE, PALETTE_NAME, RGB_PALETTE } from "../app/bead-palette.ts";
 import { createPatternFromPixels, getExportLayout } from "../app/image-processing.ts";
+import { createProjectFile, serializeProjectFile } from "../app/project-format.ts";
 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 const DEFAULTS = Object.freeze({
@@ -198,10 +199,24 @@ async function processImage(sourcePath, options) {
   const relativeSource = path.relative(options.input, sourcePath);
   const parsed = path.parse(relativeSource);
   const relativeOutput = path.join(parsed.dir, `${parsed.name}-${options.gridWidth}x${options.gridHeight}.png`);
+  const relativeProject = path.join(parsed.dir, `${parsed.name}-${options.gridWidth}x${options.gridHeight}.json`);
   const outputPath = path.join(options.output, relativeOutput);
+  const projectPath = path.join(options.output, relativeProject);
   await mkdir(path.dirname(outputPath), { recursive: true });
   const svg = renderPatternSvg(cells, options.gridWidth, options.gridHeight, options.pegboardSize);
   await sharp(Buffer.from(svg)).png({ compressionLevel: 9, palette: false }).toFile(outputPath);
+  const project = createProjectFile({
+    name: parsed.name,
+    width: options.gridWidth,
+    height: options.gridHeight,
+    colorLimit: options.colorLimit,
+    autoRemoveBackground: options.removeBackground,
+    palette: PALETTE_NAME,
+    cells,
+    savedAt: new Date().toISOString(),
+  });
+  const projectBuffer = Buffer.from(serializeProjectFile(project));
+  await writeFile(projectPath, projectBuffer);
   const outputBuffer = await readFile(outputPath);
   const outputMetadata = await sharp(outputBuffer).metadata();
   const usedColorCounts = {};
@@ -209,6 +224,7 @@ async function processImage(sourcePath, options) {
   return {
     source: relativeSource,
     output: relativeOutput,
+    project: relativeProject,
     sourceWidth: sourceMetadata.width,
     sourceHeight: sourceMetadata.height,
     outputWidth: outputMetadata.width,
@@ -218,6 +234,7 @@ async function processImage(sourcePath, options) {
     allowedCodes,
     backgroundCode,
     sha256: createHash("sha256").update(outputBuffer).digest("hex"),
+    projectSha256: createHash("sha256").update(projectBuffer).digest("hex"),
   };
 }
 
@@ -237,7 +254,7 @@ async function mapConcurrent(items, concurrency, worker) {
 
 export function renderBatchReadme(manifest) {
   const { settings } = manifest;
-  return `拼豆图纸批量导出\n\n生成参数：\n- 网格：${settings.gridWidth} × ${settings.gridHeight}\n- 颜色上限：${settings.colorLimit} 色\n- 自动移除背景：${settings.removeBackground ? "开启" : "关闭"}\n- 拼豆板尺寸：${settings.pegboardSize} × ${settings.pegboardSize}\n- 色板：${settings.palette}\n- 图纸数量：${manifest.outputCount} 张\n- 单张图纸像素尺寸：${manifest.files[0]?.outputWidth ?? "-"} × ${manifest.files[0]?.outputHeight ?? "-"}\n\n每张 PNG 均包含逐豆色号、行列编号、细网格和拼豆板粗分界线。manifest.json 记录逐文件来源、颜色用量、图纸尺寸和 SHA-256。\n`;
+  return `拼豆图纸批量导出\n\n生成参数：\n- 网格：${settings.gridWidth} × ${settings.gridHeight}\n- 颜色上限：${settings.colorLimit} 色\n- 自动移除背景：${settings.removeBackground ? "开启" : "关闭"}\n- 拼豆板尺寸：${settings.pegboardSize} × ${settings.pegboardSize}\n- 色板：${settings.palette}\n- 图纸数量：${manifest.outputCount} 张\n- JSON 源文件数量：${manifest.projectCount} 个\n- 单张图纸像素尺寸：${manifest.files[0]?.outputWidth ?? "-"} × ${manifest.files[0]?.outputHeight ?? "-"}\n\n每张 PNG 都有一个同名 JSON 源文件，可直接在 bead-grid 网页中打开并继续编辑。PNG 包含逐豆色号、行列编号、细网格和拼豆板粗分界线；manifest.json 记录逐文件来源、颜色用量、图纸尺寸及 PNG、JSON 的 SHA-256。\n`;
 }
 
 export async function batchExport(options) {
@@ -251,11 +268,11 @@ export async function batchExport(options) {
   const files = await mapConcurrent(imageFiles, options.concurrency, async (sourcePath) => {
     const result = await processImage(sourcePath, options);
     completed += 1;
-    process.stdout.write(`${JSON.stringify({ event: "exported", current: completed, total: imageFiles.length, source: result.source, output: result.output })}\n`);
+    process.stdout.write(`${JSON.stringify({ event: "exported", current: completed, total: imageFiles.length, source: result.source, output: result.output, project: result.project })}\n`);
     return result;
   });
   const manifest = {
-    version: 1,
+    version: 2,
     generatedAt: new Date().toISOString(),
     startedAt,
     settings: {
@@ -269,6 +286,7 @@ export async function batchExport(options) {
     },
     inputCount: imageFiles.length,
     outputCount: files.length,
+    projectCount: files.length,
     files,
   };
   await writeFile(path.join(options.output, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
