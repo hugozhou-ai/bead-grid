@@ -30,7 +30,7 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import { addSelectionLine, getRectangleSelection } from "./selection";
+import { addSelectionLine, getRectangleSelection, toggleSelectionCell } from "./selection";
 import { beadLabelColor, LEGACY_CODE_MAP, LEGACY_PALETTE_NAME, PALETTE, PALETTE_NAME, RGB_PALETTE } from "./bead-palette";
 import { createPatternFromPixels, getExportLayout } from "./image-processing";
 import {
@@ -460,30 +460,39 @@ export function BeadStudio() {
   }
 
   function selectRectangle(startIndex: number, endIndex: number, baseSelection: Set<number>, additive: boolean) {
-    updateSelection(getRectangleSelection(startIndex, endIndex, width, grid, baseSelection, additive));
+    updateSelection(getRectangleSelection(startIndex, endIndex, width, baseSelection, additive));
   }
 
   function selectLine(fromIndex: number, toIndex: number) {
-    updateSelection(addSelectionLine(fromIndex, toIndex, width, grid, selectedCellsRef.current));
+    updateSelection(addSelectionLine(fromIndex, toIndex, width, selectedCellsRef.current));
   }
 
   function fillSelection() {
     if (!selectedCellsRef.current.size) return;
     const next = [...grid];
     selectedCellsRef.current.forEach((index) => { next[index] = selectedColor; });
-    commitGrid(next, `已将 ${selectedCellsRef.current.size} 颗豆子填为 ${selectedColor}`, true);
+    commitGrid(next, `已将 ${selectedCellsRef.current.size} 格填为 ${selectedColor}`, true);
   }
 
   function eraseSelection() {
     if (!selectedCellsRef.current.size) return;
-    const count = selectedCellsRef.current.size;
     const next = [...grid];
-    selectedCellsRef.current.forEach((index) => { next[index] = null; });
-    commitGrid(next, `已移除 ${count} 颗豆子`);
+    let removedCount = 0;
+    selectedCellsRef.current.forEach((index) => {
+      if (next[index] !== null) {
+        next[index] = null;
+        removedCount += 1;
+      }
+    });
+    if (!removedCount) {
+      setToast("所选区域没有可移除的拼豆");
+      return;
+    }
+    commitGrid(next, `已移除 ${removedCount} 颗豆子`);
   }
 
-  function selectAllBeads() {
-    updateSelection(new Set(grid.flatMap((code, index) => code ? [index] : [])));
+  function selectAllCells() {
+    updateSelection(new Set(Array.from({ length: width * height }, (_, index) => index)));
     setTool("select");
   }
 
@@ -500,7 +509,7 @@ export function BeadStudio() {
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") {
       event.preventDefault();
-      selectAllBeads();
+      selectAllCells();
       return;
     }
     if ((event.key === "Backspace" || event.key === "Delete") && selectedCellsRef.current.size) {
@@ -547,9 +556,9 @@ export function BeadStudio() {
       if (!gesture || gesture.pointerId !== event.pointerId || gesture.mode !== "pending") return;
       gesture.mode = "trace";
       const next = new Set(gesture.baseSelection);
-      if (grid[gesture.startIndex]) next.add(gesture.startIndex);
+      next.add(gesture.startIndex);
       updateSelection(next);
-      setToast("长按选择：沿着豆子移动即可连续选中");
+      setToast("长按选择：沿着格子移动即可连续选中");
     }, 420);
   }
 
@@ -577,14 +586,7 @@ export function BeadStudio() {
     if (!gesture || gesture.pointerId !== event.pointerId) return false;
     clearSelectionTimer();
     if (!cancelled && gesture.mode === "pending") {
-      const next = new Set(gesture.baseSelection);
-      if (grid[gesture.startIndex]) {
-        if (next.has(gesture.startIndex)) next.delete(gesture.startIndex);
-        else next.add(gesture.startIndex);
-      } else if (!gesture.additive) {
-        next.clear();
-      }
-      updateSelection(next);
+      updateSelection(toggleSelectionCell(gesture.startIndex, gesture.baseSelection));
     }
     selectionGestureRef.current = null;
     return true;
@@ -1087,11 +1089,11 @@ export function BeadStudio() {
 
           <div className="canvas-stage">
             {selectedCells.size > 0 && (
-              <div className="selection-actions" role="toolbar" aria-label="所选豆子操作">
-                <strong><MousePointer2 aria-hidden="true" />{selectedCells.size} 颗已选</strong>
+              <div className="selection-actions" role="toolbar" aria-label="所选格子操作">
+                <strong><MousePointer2 aria-hidden="true" />{selectedCells.size} 格已选</strong>
                 <button onClick={fillSelection}><PaintBucket aria-hidden="true" />填为 {selectedColor}</button>
                 <button className="danger" onClick={eraseSelection}><Trash2 aria-hidden="true" />移除</button>
-                <button onClick={selectAllBeads}><Scan aria-hidden="true" />全选</button>
+                <button onClick={selectAllCells}><Scan aria-hidden="true" />全选</button>
                 <button className="icon-only" aria-label="取消选择" title="取消选择" onClick={() => updateSelection(new Set())}><X aria-hidden="true" /></button>
               </div>
             )}

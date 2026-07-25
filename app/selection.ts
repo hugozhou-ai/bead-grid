@@ -2,7 +2,6 @@ export function getRectangleSelection(
   startIndex: number,
   endIndex: number,
   width: number,
-  grid: Array<string | null>,
   baseSelection: Set<number>,
   additive: boolean,
 ) {
@@ -13,8 +12,7 @@ export function getRectangleSelection(
   const next = additive ? new Set(baseSelection) : new Set<number>();
   for (let y = Math.min(startY, endY); y <= Math.max(startY, endY); y += 1) {
     for (let x = Math.min(startX, endX); x <= Math.max(startX, endX); x += 1) {
-      const index = y * width + x;
-      if (grid[index]) next.add(index);
+      next.add(y * width + x);
     }
   }
   return next;
@@ -24,7 +22,6 @@ export function addSelectionLine(
   fromIndex: number,
   toIndex: number,
   width: number,
-  grid: Array<string | null>,
   selection: Set<number>,
 ) {
   let x0 = fromIndex % width;
@@ -38,8 +35,7 @@ export function addSelectionLine(
   let error = dx + dy;
   const next = new Set(selection);
   while (true) {
-    const index = y0 * width + x0;
-    if (grid[index]) next.add(index);
+    next.add(y0 * width + x0);
     if (x0 === x1 && y0 === y1) break;
     const doubledError = error * 2;
     if (doubledError >= dy) {
@@ -51,5 +47,12 @@ export function addSelectionLine(
       y0 += stepY;
     }
   }
+  return next;
+}
+
+export function toggleSelectionCell(index: number, selection: Set<number>) {
+  const next = new Set(selection);
+  if (next.has(index)) next.delete(index);
+  else next.add(index);
   return next;
 }
