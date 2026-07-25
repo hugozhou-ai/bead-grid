@@ -1098,7 +1098,7 @@ export function BeadStudio() {
               <button className={tool === "erase" ? "active" : ""} onClick={() => setTool("erase")}><Eraser aria-hidden="true" />橡皮</button>
               <button className={tool === "pick" ? "active" : ""} onClick={() => setTool("pick")}><Pipette aria-hidden="true" />吸管</button>
               <button className={tool === "select" ? "active" : ""} onClick={() => setTool("select")}><MousePointer2 aria-hidden="true" />选择</button>
-              <button onClick={addWhiteOutline} disabled={!total} title={`在主体外围添加一格 ${PURE_WHITE_BEAD_CODE} 纯白拼豆`}><ShieldCheck aria-hidden="true" />白色描边</button>
+              <button onClick={addWhiteOutline} disabled={!total} title={`仅在主体水平、垂直相邻空格添加一格 ${PURE_WHITE_BEAD_CODE} 纯白拼豆`}><ShieldCheck aria-hidden="true" />白色描边</button>
             </div>
             <div className="toolbar-right">
               <button title="撤销" aria-label="撤销" onClick={undo} disabled={!undoStack.length}><Undo2 aria-hidden="true" /></button>

@@ -14,6 +14,13 @@ type Bounds = {
   maxY: number;
 };
 
+const ORTHOGONAL_OUTLINE_OFFSETS = [
+  [-1, 0],
+  [1, 0],
+  [0, -1],
+  [0, 1],
+] as const;
+
 function getOccupiedBounds(cells: Array<string | null>, width: number): Bounds | null {
   let minX = width;
   let minY = Math.ceil(cells.length / width);
@@ -102,18 +109,15 @@ export function createOuterOutline(
   occupiedIndices.forEach((index) => {
     const x = index % nextWidth;
     const y = Math.floor(index / nextWidth);
-    for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
-      for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
-        if (offsetX === 0 && offsetY === 0) continue;
-        const outlineX = x + offsetX;
-        const outlineY = y + offsetY;
-        if (outlineX < 0 || outlineY < 0 || outlineX >= nextWidth || outlineY >= nextHeight) continue;
-        const outlineIndex = outlineY * nextWidth + outlineX;
-        if (!exterior[outlineIndex] || next[outlineIndex] !== null) continue;
-        next[outlineIndex] = outlineCode;
-        addedCount += 1;
-      }
-    }
+    ORTHOGONAL_OUTLINE_OFFSETS.forEach(([deltaX, deltaY]) => {
+      const outlineX = x + deltaX;
+      const outlineY = y + deltaY;
+      if (outlineX < 0 || outlineY < 0 || outlineX >= nextWidth || outlineY >= nextHeight) return;
+      const outlineIndex = outlineY * nextWidth + outlineX;
+      if (!exterior[outlineIndex] || next[outlineIndex] !== null) return;
+      next[outlineIndex] = outlineCode;
+      addedCount += 1;
+    });
   });
 
   return { cells: next, width: nextWidth, height: nextHeight, addedCount, offsetX, offsetY };

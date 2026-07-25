@@ -8,7 +8,7 @@ test("uses the closest MARD color to pure white", () => {
   assert.equal(PALETTE.find(({ code }) => code === PURE_WHITE_BEAD_CODE)?.hex, "#FEFFFF");
 });
 
-test("adds one white layer around a subject in all eight directions", () => {
+test("adds white beads only to the four orthogonal neighbors", () => {
   const cells = [
     null, null, null,
     null, "F5", null,
@@ -16,11 +16,11 @@ test("adds one white layer around a subject in all eight directions", () => {
   ];
   const outlined = createOuterOutline(cells, 3, 3, PURE_WHITE_BEAD_CODE, 160);
 
-  assert.equal(outlined.addedCount, 8);
+  assert.equal(outlined.addedCount, 4);
   assert.deepEqual(outlined.cells, [
-    "H2", "H2", "H2",
+    null, "H2", null,
     "H2", "F5", "H2",
-    "H2", "H2", "H2",
+    null, "H2", null,
   ]);
 });
 
@@ -35,7 +35,7 @@ test("keeps enclosed holes empty while outlining the exterior", () => {
   const outlined = createOuterOutline(cells, 5, 5, PURE_WHITE_BEAD_CODE, 160);
 
   assert.equal(outlined.cells[2 * 5 + 2], null);
-  assert.equal(outlined.addedCount, 16);
+  assert.equal(outlined.addedCount, 12);
 });
 
 test("repositions an edge-touching subject without resizing when space is available", () => {
@@ -51,7 +51,7 @@ test("repositions an edge-touching subject without resizing when space is availa
   assert.equal(outlined.offsetX, 1);
   assert.equal(outlined.offsetY, 1);
   assert.equal(outlined.cells[4], "F5");
-  assert.equal(outlined.addedCount, 8);
+  assert.equal(outlined.addedCount, 4);
 });
 
 test("expands the grid when a full-width subject needs exterior space", () => {
@@ -60,7 +60,7 @@ test("expands the grid when a full-width subject needs exterior space", () => {
   assert.equal(outlined.width, 4);
   assert.equal(outlined.height, 3);
   assert.deepEqual(outlined.cells.slice(5, 7), ["F5", "F5"]);
-  assert.equal(outlined.addedCount, 10);
+  assert.equal(outlined.addedCount, 6);
 });
 
 test("rejects a subject that cannot fit inside the maximum grid with its outline", () => {
