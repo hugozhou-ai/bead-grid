@@ -31,8 +31,9 @@ import {
   X,
 } from "lucide-react";
 import { addSelectionLine, getRectangleSelection, toggleSelectionCell } from "./selection";
-import { beadLabelColor, LEGACY_CODE_MAP, LEGACY_PALETTE_NAME, PALETTE, PALETTE_NAME, RGB_PALETTE } from "./bead-palette";
+import { beadLabelColor, LEGACY_CODE_MAP, LEGACY_PALETTE_NAME, PALETTE, PALETTE_NAME, PURE_WHITE_BEAD_CODE, RGB_PALETTE } from "./bead-palette";
 import { createPatternFromPixels, getExportLayout } from "./image-processing";
+import { createOuterOutline } from "./outline";
 import {
   createProjectFile,
   MAX_PROJECT_GRID_SIZE,
@@ -494,6 +495,25 @@ export function BeadStudio() {
   function selectAllCells() {
     updateSelection(new Set(Array.from({ length: width * height }, (_, index) => index)));
     setTool("select");
+  }
+
+  function addWhiteOutline() {
+    try {
+      const outlined = createOuterOutline(grid, width, height, PURE_WHITE_BEAD_CODE, MAX_GRID_SIZE);
+      if (!outlined.addedCount) {
+        setToast("当前图纸没有可描边的主体");
+        return;
+      }
+      commitGrid(
+        outlined.cells,
+        `已添加 ${outlined.addedCount} 颗 ${PURE_WHITE_BEAD_CODE} 纯白描边`,
+        false,
+        outlined.width,
+        outlined.height,
+      );
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : String(error));
+    }
   }
 
   function handleCanvasKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -1078,6 +1098,7 @@ export function BeadStudio() {
               <button className={tool === "erase" ? "active" : ""} onClick={() => setTool("erase")}><Eraser aria-hidden="true" />橡皮</button>
               <button className={tool === "pick" ? "active" : ""} onClick={() => setTool("pick")}><Pipette aria-hidden="true" />吸管</button>
               <button className={tool === "select" ? "active" : ""} onClick={() => setTool("select")}><MousePointer2 aria-hidden="true" />选择</button>
+              <button onClick={addWhiteOutline} disabled={!total} title={`在主体外围添加一格 ${PURE_WHITE_BEAD_CODE} 纯白拼豆`}><ShieldCheck aria-hidden="true" />白色描边</button>
             </div>
             <div className="toolbar-right">
               <button title="撤销" aria-label="撤销" onClick={undo} disabled={!undoStack.length}><Undo2 aria-hidden="true" /></button>

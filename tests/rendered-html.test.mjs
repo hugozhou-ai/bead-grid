@@ -122,5 +122,7 @@ test("uses one icon library and exposes batch selection controls", async () => {
   assert.match(source, /"rectangle" \| "trace"/);
   assert.match(source, /长按选择：沿着格子移动即可连续选中/);
   assert.match(source, /aria-label="所选格子操作"/);
+  assert.match(source, />白色描边<\/button>/);
+  assert.match(source, /createOuterOutline\(grid, width, height, PURE_WHITE_BEAD_CODE, MAX_GRID_SIZE\)/);
   assert.doesNotMatch(source, /✎|◇|◉|↶|↷|⌄/);
 });
