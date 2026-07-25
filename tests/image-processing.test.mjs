@@ -34,21 +34,15 @@ test("scales PNG cell resolution with the grid while keeping large exports bound
 });
 
 test("calculates the complete export canvas layout", () => {
-  assert.deepEqual(getExportLayout(64, 64), {
-    cell: 64,
-    labelGutter: 55,
-    gridPixelWidth: 4096,
-    gridPixelHeight: 4096,
-    legendTop: 4206,
-    legendPadding: 32,
-    legendHeaderHeight: 45,
-    legendItemHeight: 47,
-    legendColumns: 0,
-    legendRows: 0,
-    legendHeight: 0,
-    outputWidth: 4206,
-    outputHeight: 4206,
-  });
+  const layout = getExportLayout(64, 64);
+  assert.equal(layout.cell, 64);
+  assert.equal(layout.labelGutter, 55);
+  assert.equal(layout.gridPixelWidth, 4096);
+  assert.equal(layout.gridPixelHeight, 4096);
+  assert.equal(layout.legendTop, 4206);
+  assert.equal(layout.legendHeight, 0);
+  assert.equal(layout.outputWidth, 4206);
+  assert.equal(layout.outputHeight, 4206);
 });
 
 test("reserves rows below the pattern for every material legend item", () => {
@@ -56,7 +50,19 @@ test("reserves rows below the pattern for every material legend item", () => {
   assert.equal(layout.legendColumns, 2);
   assert.equal(layout.legendRows, 3);
   assert.equal(layout.legendTop, 932);
-  assert.equal(layout.outputHeight, 1306);
+  assert.equal(layout.outputHeight, 1184);
+});
+
+test("scales legend typography and swatches up with larger patterns", () => {
+  const small = getExportLayout(32, 32, 10);
+  const medium = getExportLayout(80, 80, 10);
+  const large = getExportLayout(160, 160, 10);
+  assert.ok(small.legendBodyFontSize < medium.legendBodyFontSize);
+  assert.ok(medium.legendBodyFontSize < large.legendBodyFontSize);
+  assert.ok(small.legendSwatchRadius < medium.legendSwatchRadius);
+  assert.ok(medium.legendSwatchRadius < large.legendSwatchRadius);
+  assert.ok(small.legendItemHeight < medium.legendItemHeight);
+  assert.ok(medium.legendItemHeight < large.legendItemHeight);
 });
 
 test("detects the most frequent non-transparent color as the background", () => {

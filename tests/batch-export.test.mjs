@@ -40,7 +40,7 @@ test("exports a source image and records the effective settings", async () => {
   assert.deepEqual(manifest.files[0].usedColorCounts, { F9: 64 });
   const metadata = await sharp(path.join(output, "sample-8x8.png")).metadata();
   assert.equal(metadata.width, 932);
-  assert.equal(metadata.height, 1166);
+  assert.equal(metadata.height, 1088);
   const savedManifest = JSON.parse(await readFile(path.join(output, "manifest.json"), "utf8"));
   assert.equal(savedManifest.files[0].output, "sample-8x8.png");
   const readme = await readFile(path.join(output, "README.txt"), "utf8");

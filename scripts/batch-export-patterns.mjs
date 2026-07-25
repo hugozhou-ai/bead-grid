@@ -121,6 +121,10 @@ export function renderPatternSvg(cells, width, height, pegboardSize) {
     legendPadding,
     legendHeaderHeight,
     legendItemHeight,
+    legendBodyFontSize,
+    legendHeaderFontSize,
+    legendSummaryFontSize,
+    legendSwatchRadius,
     legendColumns,
     outputWidth,
     outputHeight,
@@ -156,10 +160,10 @@ export function renderPatternSvg(cells, width, height, pegboardSize) {
     const row = Math.floor(index / legendColumns);
     const x = legendPadding + column * columnWidth;
     const y = legendTop + legendPadding + legendHeaderHeight + row * legendItemHeight + legendItemHeight / 2;
-    const swatchRadius = Math.max(12, cell * .24);
-    return `<circle cx="${x + swatchRadius}" cy="${y}" r="${swatchRadius}" fill="${color.hex}" stroke="#514b42" stroke-width="${Math.max(1.5, cell * .025)}"/><text x="${x + swatchRadius * 2 + cell * .18}" y="${y}" text-anchor="start" dominant-baseline="central">${escapeXml(`${color.code} · ${color.name}`)}</text><text x="${x + columnWidth - cell * .22}" y="${y}" text-anchor="end" dominant-baseline="central">${count} 颗</text>`;
+    const swatchRadius = legendSwatchRadius;
+    return `<circle cx="${x + swatchRadius}" cy="${y}" r="${swatchRadius}" fill="${color.hex}" stroke="#514b42" stroke-width="${Math.max(1.5, legendBodyFontSize * .06)}"/><text x="${x + swatchRadius * 2 + legendBodyFontSize * .45}" y="${y}" text-anchor="start" dominant-baseline="central">${escapeXml(`${color.code} · ${color.name}`)}</text><text x="${x + columnWidth - legendBodyFontSize * .5}" y="${y}" text-anchor="end" dominant-baseline="central">${count} 颗</text>`;
   }).join("");
-  const legend = usage.length ? `<g font-family="LXGW WenKai, sans-serif" font-weight="700"><path d="M${legendPadding} ${legendTop}H${outputWidth - legendPadding}" stroke="#756c60" stroke-width="${Math.max(2, cell * .05)}"/><text x="${legendPadding}" y="${legendTop + legendPadding + legendHeaderHeight / 2}" fill="#282722" font-size="${Math.max(20, cell * .42)}" dominant-baseline="central">材料清单</text><text x="${outputWidth - legendPadding}" y="${legendTop + legendPadding + legendHeaderHeight / 2}" fill="#756c60" font-size="${Math.max(15, cell * .27)}" text-anchor="end" dominant-baseline="central">共 ${total} 颗 · ${usage.length} 种颜色</text><g fill="#282722" font-size="${Math.max(16, cell * .31)}">${legendItems}</g></g>` : "";
+  const legend = usage.length ? `<g font-family="LXGW WenKai, sans-serif" font-weight="700"><path d="M${legendPadding} ${legendTop}H${outputWidth - legendPadding}" stroke="#756c60" stroke-width="${Math.max(2, legendBodyFontSize * .08)}"/><text x="${legendPadding}" y="${legendTop + legendPadding + legendHeaderHeight / 2}" fill="#282722" font-size="${legendHeaderFontSize}" dominant-baseline="central">材料清单</text><text x="${outputWidth - legendPadding}" y="${legendTop + legendPadding + legendHeaderHeight / 2}" fill="#756c60" font-size="${legendSummaryFontSize}" text-anchor="end" dominant-baseline="central">共 ${total} 颗 · ${usage.length} 种颜色</text><g fill="#282722" font-size="${legendBodyFontSize}">${legendItems}</g></g>` : "";
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${outputWidth}" height="${outputHeight}" viewBox="0 0 ${outputWidth} ${outputHeight}">
   <rect width="100%" height="100%" fill="#fffdf8"/>

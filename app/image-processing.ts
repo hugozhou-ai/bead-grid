@@ -65,13 +65,18 @@ export function getExportLayout(width: number, height: number, legendItemCount =
   const labelGutter = Math.max(24, Math.ceil(cell * .85));
   const gridPixelWidth = width * cell;
   const gridPixelHeight = height * cell;
+  const outputWidth = gridPixelWidth + labelGutter * 2;
   const baseHeight = gridPixelHeight + labelGutter * 2;
-  const legendPadding = Math.max(24, Math.ceil(cell * .5));
-  const legendHeaderHeight = Math.max(36, Math.ceil(cell * .7));
-  const legendItemHeight = Math.max(40, Math.ceil(cell * .72));
-  const availableLegendWidth = gridPixelWidth + labelGutter * 2 - legendPadding * 2;
+  const legendBodyFontSize = Math.max(18, Math.min(56, Math.round(outputWidth / 110)));
+  const legendHeaderFontSize = Math.ceil(legendBodyFontSize * 1.3);
+  const legendSummaryFontSize = Math.ceil(legendBodyFontSize * .82);
+  const legendSwatchRadius = Math.ceil(legendBodyFontSize * .78);
+  const legendPadding = Math.max(32, Math.ceil(outputWidth * .012));
+  const legendHeaderHeight = Math.max(44, Math.ceil(legendHeaderFontSize * 1.6));
+  const legendItemHeight = Math.max(48, Math.ceil(legendSwatchRadius * 2 + legendBodyFontSize * .55));
+  const availableLegendWidth = outputWidth - legendPadding * 2;
   const legendColumns = legendItemCount > 0
-    ? Math.max(1, Math.min(4, Math.floor(availableLegendWidth / Math.max(280, cell * 3.6))))
+    ? Math.max(1, Math.min(4, legendItemCount, Math.floor(availableLegendWidth / Math.max(320, legendBodyFontSize * 11))))
     : 0;
   const legendRows = legendColumns ? Math.ceil(legendItemCount / legendColumns) : 0;
   const legendHeight = legendRows
@@ -86,10 +91,14 @@ export function getExportLayout(width: number, height: number, legendItemCount =
     legendPadding,
     legendHeaderHeight,
     legendItemHeight,
+    legendBodyFontSize,
+    legendHeaderFontSize,
+    legendSummaryFontSize,
+    legendSwatchRadius,
     legendColumns,
     legendRows,
     legendHeight,
-    outputWidth: gridPixelWidth + labelGutter * 2,
+    outputWidth,
     outputHeight: baseHeight + legendHeight,
   };
 }

@@ -832,6 +832,10 @@ export function BeadStudio() {
       legendPadding,
       legendHeaderHeight,
       legendItemHeight,
+      legendBodyFontSize,
+      legendHeaderFontSize,
+      legendSummaryFontSize,
+      legendSwatchRadius,
       legendColumns,
       outputWidth,
       outputHeight,
@@ -909,17 +913,17 @@ export function BeadStudio() {
       const columnWidth = legendWidth / legendColumns;
       const headerY = legendTop + legendPadding + legendHeaderHeight / 2;
       context.strokeStyle = "#756c60";
-      context.lineWidth = Math.max(2, cell * .05);
+      context.lineWidth = Math.max(2, legendBodyFontSize * .08);
       context.beginPath();
       context.moveTo(legendPadding, legendTop);
       context.lineTo(outputWidth - legendPadding, legendTop);
       context.stroke();
       context.fillStyle = "#282722";
-      context.font = `700 ${Math.max(20, cell * .42)}px "LXGW WenKai", sans-serif`;
+      context.font = `700 ${legendHeaderFontSize}px "LXGW WenKai", sans-serif`;
       context.textAlign = "left";
       context.fillText("材料清单", legendPadding, headerY);
       context.fillStyle = "#756c60";
-      context.font = `700 ${Math.max(15, cell * .27)}px "LXGW WenKai", sans-serif`;
+      context.font = `700 ${legendSummaryFontSize}px "LXGW WenKai", sans-serif`;
       context.textAlign = "right";
       context.fillText(`共 ${total.toLocaleString()} 颗 · ${counts.length} 种颜色`, outputWidth - legendPadding, headerY);
       counts.forEach(({ color, count }, index) => {
@@ -927,20 +931,20 @@ export function BeadStudio() {
         const row = Math.floor(index / legendColumns);
         const x = legendPadding + column * columnWidth;
         const y = legendTop + legendPadding + legendHeaderHeight + row * legendItemHeight + legendItemHeight / 2;
-        const swatchRadius = Math.max(12, cell * .24);
+        const swatchRadius = legendSwatchRadius;
         context.fillStyle = color.hex;
         context.beginPath();
         context.arc(x + swatchRadius, y, swatchRadius, 0, Math.PI * 2);
         context.fill();
         context.strokeStyle = "#514b42";
-        context.lineWidth = Math.max(1.5, cell * .025);
+        context.lineWidth = Math.max(1.5, legendBodyFontSize * .06);
         context.stroke();
         context.fillStyle = "#282722";
-        context.font = `700 ${Math.max(16, cell * .31)}px "LXGW WenKai", sans-serif`;
+        context.font = `700 ${legendBodyFontSize}px "LXGW WenKai", sans-serif`;
         context.textAlign = "left";
-        context.fillText(`${color.code} · ${color.name}`, x + swatchRadius * 2 + cell * .18, y);
+        context.fillText(`${color.code} · ${color.name}`, x + swatchRadius * 2 + legendBodyFontSize * .45, y);
         context.textAlign = "right";
-        context.fillText(`${count.toLocaleString()} 颗`, x + columnWidth - cell * .22, y);
+        context.fillText(`${count.toLocaleString()} 颗`, x + columnWidth - legendBodyFontSize * .5, y);
       });
     }
     output.toBlob((blob) => {
